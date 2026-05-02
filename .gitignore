@@ -1,0 +1,18 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.env
+dist/
+build/
+*.egg-info/
+
+# local agent / OMC runtime state
+.omc/
+
+# editor / os
+.DS_Store
+.idea/
+.vscode/

@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: wordforge-pg
+    environment:
+      POSTGRES_USER: wordforge
+      POSTGRES_PASSWORD: wordforge
+      POSTGRES_DB: wordforge
+    ports:
+      - "5433:5432"
+    volumes:
+      - wordforge_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wordforge"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  wordforge_pg_data:

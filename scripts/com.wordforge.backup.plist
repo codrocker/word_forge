@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Daily wordforge backup. macOS launchd agent sample.
+
+  Install:
+    cp scripts/com.wordforge.backup.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.wordforge.backup.plist
+
+  Verify / tail:
+    launchctl list | grep com.wordforge.backup
+    tail -f /tmp/wordforge_smoke/backup/$(date +%Y-%m-%d)/backup_*.log
+
+  Uninstall:
+    launchctl unload ~/Library/LaunchAgents/com.wordforge.backup.plist
+    rm ~/Library/LaunchAgents/com.wordforge.backup.plist
+
+  Runs every day at 04:00 local time.
+  Edit the StartCalendarInterval Hour/Minute to change schedule.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.wordforge.backup</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/allen/code/ai_ark/wordforge/scripts/backup_all.sh</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/allen/code/ai_ark/wordforge</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
+    </dict>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>4</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/wordforge_smoke/backup/launchd.stdout.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/tmp/wordforge_smoke/backup/launchd.stderr.log</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>

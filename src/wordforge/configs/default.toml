@@ -1,0 +1,98 @@
+# wordforge stage pipeline configuration (v9 spec §6: parser_version;
+# v9 spec §7: CLI plan/run; lives inside the package so importlib.resources
+# finds it whether running from a git checkout or an installed wheel).
+#
+# `parser_version` MUST be bumped by hand when parser / client / post-
+# processing semantics change (see spec §6). Changes here invalidate
+# that stage's fingerprint → re-run (cache still hits to save API cost).
+
+[stages.fetch_dict]
+parser_version = "1"
+cost_estimate_usd = 0.0   # dict scrape, no LLM
+
+[stages.paraphrase]
+parser_version = "1"
+prompt_version = "v1"
+provider = "bedrock"
+# Quality-critical — ~83% of momo words shortcut this stage via
+# WORDFORGE_MOMO_REF_FILE (0 LLM cost); the remaining 17% was opus-4-7
+# (~$0.049/word, 122k = $6,039 full-batch). Downgraded to sonnet-4-6
+# 2026-05-01 after codex + gemini converged: quality 2× weight doesn't
+# justify opus's 5× cost over sonnet when the learner-facing delta is
+# marginal. Full-batch drops to ~$1,208 (-$4,831).
+model = "us.anthropic.claude-sonnet-4-6"
+cost_estimate_usd = 0.0014   # sonnet-4-6 in $3/M, out $15/M; shortcut amortizes
+
+[stages.paraphrase_rerank]
+# Not a real stage (build_stages skips it); config-only "sub-stage" so
+# _rerank_meanings() can swap its model without code edits. Task is
+# pattern-matching (reorder existing meanings by frequency), so quality =
+# cost weight. Switched 2026-05-01 haiku-4-5 → gemini-2.5-flash: the
+# latter costs ~15× less ($26 vs $403 full-batch) for equivalent output
+# on pure reorder tasks. Short-circuits when meanings <= 3 keeps volume bounded.
+parser_version = "1"
+prompt_version = "v1"
+provider = "gemini"
+model = "gemini-2.5-flash"
+cost_estimate_usd = 0.0002
+
+[stages.phonetic]
+parser_version = "1"
+cost_estimate_usd = 0.0
+
+[stages.derivatives]
+parser_version = "1"
+prompt_version = "v1"
+provider = "gemini"
+# Morphological lookup (plural/past_tense/synonyms); pattern-matching task,
+# a flash-class model handles it for ~$0.00018/word vs haiku-4.5 $0.00376.
+# Switched 2026-05-01 after the 121k recovery run showed derivatives at
+# $0.004/word × 121k = ~$450; flash brings it to ~$22.
+model = "gemini-2.5-flash"
+cost_estimate_usd = 0.0002
+
+[stages.examples]
+parser_version = "1"
+# v2 (2026-05-01): feeds dictionary examples (collins + ec + blng_sents_part
+# from fetch_dict) as style reference with explicit "inspiration only, never
+# copy verbatim" + "supporting vocabulary easier than target" constraints.
+prompt_version = "v2"
+provider = "openai"
+# Example sentences + CN translation alignment is the most user-visible
+# pattern-match stage. Flash ($26 full-batch) is cheap but sometimes
+# stilted; gpt-5-mini ($171) is the codex-recommended quality/cost sweet
+# spot — +$145 buys better format stability and fewer wooden translations.
+# Switched 2026-05-01 after the cost/quality review.
+model = "gpt-5-mini"
+cost_estimate_usd = 0.0014
+
+[stages.mnemonic]
+parser_version = "1"
+prompt_version = "v1"
+provider = "bedrock"
+# Creative phonetic-pun generation — highest-value field; quality 2× weight.
+# 2026-05-01 blind shootout (scripts/mnemonic_shootout.py, 50 words, opus-4-7
+# judge) produced:
+#   flash  avg 2.96 / 12 wins / $6   full-batch
+#   qwen   avg 3.17 / 17 wins / $149
+#   sonnet avg 3.39 / 15 wins / $312   ← chosen
+# Codex + gemini theory favored qwen3-max as the "Chinese-phonetic sweet
+# spot"; the data disagreed — sonnet-4-6 led on all three axes
+# (hook/scene/chinese_natural), especially scene_vividness. Qwen's 17 wins
+# came from sporadic high-notes, not consistent quality. The $163 delta
+# (qwen → sonnet) buys +0.22 avg score on a 5-point scale, and under 2×
+# quality weight that clears the cost bar.
+model = "us.anthropic.claude-sonnet-4-6"
+cost_estimate_usd = 0.0026
+
+[stages.quality_gate]
+parser_version = "1"
+cost_estimate_usd = 0.0
+
+[stages.export]
+parser_version = "1"
+cost_estimate_usd = 0.0
+
+# budget_cap_usd per batch: absent key = unbounded. DBA overrides via
+# UPDATE pipeline.batches SET budget_cap_usd = ... WHERE id = 'Bxx'.
+# default_budget_cap_usd = 50.0   # example; leave commented for "no cap"
