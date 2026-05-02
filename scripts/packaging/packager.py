@@ -6,6 +6,7 @@ Spec §7. Uses stdlib sqlite3 + zipfile only.
 from __future__ import annotations
 
 import sqlite3
+import zipfile
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -54,3 +55,15 @@ def write_sqlite(
         return total
     finally:
         conn.close()
+
+
+def zip_db(db_path: Path, zip_path: Path) -> None:
+    """Zip db_path into zip_path with a fixed internal entry name 'words.db'.
+
+    Overwrites any existing zip at zip_path. Creates parent dir if missing.
+    """
+    zip_path.parent.mkdir(parents=True, exist_ok=True)
+    if zip_path.exists():
+        zip_path.unlink()
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+        z.write(db_path, arcname="words.db")

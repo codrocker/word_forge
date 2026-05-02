@@ -2,11 +2,12 @@
 
 import json
 import sqlite3
+import zipfile
 from pathlib import Path
 
 import pytest
 
-from scripts.packaging.packager import write_sqlite
+from scripts.packaging.packager import write_sqlite, zip_db
 
 
 def test_write_sqlite_creates_expected_schema(tmp_path: Path):
@@ -65,3 +66,35 @@ def test_write_sqlite_rejects_non_string_json(tmp_path: Path):
     db_path = tmp_path / "words.db"
     with pytest.raises((sqlite3.InterfaceError, sqlite3.ProgrammingError, TypeError)):
         write_sqlite(db_path, [(1, {"not": "a string"})])  # type: ignore[list-item]
+
+
+def test_zip_db_produces_zip_with_words_db_entry(tmp_path: Path):
+    src = tmp_path / "source.db"
+    src.write_bytes(b"fake sqlite bytes")
+    out = tmp_path / "out.zip"
+
+    zip_db(src, out)
+
+    assert out.exists()
+    with zipfile.ZipFile(out) as z:
+        names = z.namelist()
+        assert names == ["words.db"]  # single entry, fixed name
+        assert z.read("words.db") == b"fake sqlite bytes"
+
+
+def test_zip_db_overwrites_existing(tmp_path: Path):
+    src = tmp_path / "source.db"
+    src.write_bytes(b"v2")
+    out = tmp_path / "out.zip"
+    out.write_bytes(b"old-zip-bytes")
+    zip_db(src, out)
+    with zipfile.ZipFile(out) as z:
+        assert z.read("words.db") == b"v2"
+
+
+def test_zip_db_creates_parent_dir(tmp_path: Path):
+    src = tmp_path / "source.db"
+    src.write_bytes(b"x")
+    out = tmp_path / "nested" / "dir" / "out.zip"
+    zip_db(src, out)
+    assert out.exists()
