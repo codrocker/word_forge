@@ -102,6 +102,6 @@ ps -M <pid>   # 各线程 CPU;全 0.0 = 全卡 I/O
 
 ## Git 守则
 
-- 当前主工作分支 `allen`;`main` 用于 PR。
+- `main` 用于 PR;按功能开 `feat/*`、修复开 `fix/*` 等语义化分支,不要直接在长期集成分支上堆提交。
 - 只 commit 要求提交时才 commit;never push 没被要求就 push。
 - pre-commit hook 失败不用 `--no-verify`;修根因再新建 commit。

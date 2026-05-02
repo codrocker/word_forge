@@ -451,7 +451,12 @@ class ExportStage:
 # --- Pure helper functions ---
 
 
-_POS_MAP = {"n": 1, "v": 2, "adj": 3, "adv": 4, "prep": 5, "conj": 6, "pron": 7, "interj": 8}
+_POS_MAP = {
+    "n": 1, "v": 2, "adj": 3, "adv": 4,
+    "prep": 5, "conj": 6, "pron": 7, "interj": 8,
+    "num": 9, "art": 10,
+    "phrasal_verb": 201,
+}
 
 
 def _build_app_words_row(ups: dict, form: str, type_: int) -> dict:
