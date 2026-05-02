@@ -66,7 +66,9 @@ def transform_body(
     parsed = json.loads(raw_body)
     all_ids = [w["id"] for u in parsed for w in u["words"]]
     if not all_ids:
-        return raw_body, "ok", {}
+        # 原始数据中存在骨架包: 有 units 有 title 但 words=[].
+        # 不写回,也不算 ok,单独标记便于幂等验证.
+        return None, "empty", {}
 
     has_original = any(i >= _THRESHOLD for i in all_ids)
     has_shifted = any(i < _THRESHOLD for i in all_ids)
@@ -172,7 +174,14 @@ def main(argv: list[str] | None = None) -> int:
     keys = [obj.key for obj in oss2.ObjectIterator(bucket)]
     _log(f"  found {len(keys)} objects")
 
-    counts = {"ok": 0, "ok_with_filter": 0, "already_shifted": 0, "dead_letter": 0, "error": 0}
+    counts = {
+        "ok": 0,
+        "ok_with_filter": 0,
+        "already_shifted": 0,
+        "empty": 0,
+        "dead_letter": 0,
+        "error": 0,
+    }
     with (
         args.dead_letter.open("a", encoding="utf-8") as dl_fp,
         args.filter_audit.open("a", encoding="utf-8") as fa_fp,
@@ -203,6 +212,8 @@ def main(argv: list[str] | None = None) -> int:
                 counts["dead_letter"] += 1
             elif status == "already_shifted":
                 counts["already_shifted"] += 1
+            elif status == "empty":
+                counts["empty"] += 1
             elif status == "ok":
                 if details:
                     fa_fp.write(json.dumps({"package_id": key, **details}) + "\n")
@@ -210,8 +221,15 @@ def main(argv: list[str] | None = None) -> int:
                 else:
                     counts["ok"] += 1
                 if args.i_am_writing_prod:
-                    # put_object 在 Task 5 启用;这里先占位,保证 dry-run 路径干净.
-                    pass
+                    try:
+                        bucket.put_object(key, new_body.encode("utf-8"))
+                    except oss2.exceptions.OssError as e:
+                        _log(f"  [{key}] upload failed: {e}")
+                        dl_fp.write(
+                            json.dumps({"package_id": key, "reason": f"upload: {e}"}) + "\n"
+                        )
+                        counts["error"] += 1
+                        continue
 
             if i % 100 == 0:
                 _log(f"  progress: {i}/{len(keys)}  {counts}")

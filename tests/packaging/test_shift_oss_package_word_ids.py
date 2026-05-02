@@ -95,12 +95,13 @@ def test_transform_raises_on_mixed_id_range():
         transform_body(body, valid_new_ids=valid)
 
 
-def test_transform_empty_words_returns_ok():
+def test_transform_empty_words_returns_empty():
+    """骨架包(有 unit 有 title 但 words=[]) — skip,不写回."""
     valid: set[int] = set()
     body = json.dumps([{"id": 1, "title": "empty", "words": []}])
 
     new_body, status, details = transform_body(body, valid_new_ids=valid)
 
-    assert status == "ok"
-    assert new_body == body
+    assert status == "empty"
+    assert new_body is None
     assert details == {}
