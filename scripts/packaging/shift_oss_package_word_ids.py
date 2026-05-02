@@ -7,6 +7,12 @@ Plan: docs/superpowers/plans/2026-05-02-shift-oss-package-word-ids.md
 from __future__ import annotations
 
 import json
+import os
+import sys
+import time
+
+import oss2
+from sqlalchemy import create_engine, text
 
 # ruff: noqa: E501 — long prompt/log strings for readability
 
@@ -19,6 +25,25 @@ _THRESHOLD = 10**9  # 原始 id >= 10^9,已 shift id < 10^9
 
 class InvalidMixedIdRangeError(ValueError):
     """同一 package 内同时出现原始(10^9+) 和已 shift(10^5) 两种 id — 异常数据。"""
+
+
+def _log(msg: str) -> None:
+    print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
+
+
+def load_valid_word_ids(database_url: str) -> set[int]:
+    """Load all word_id from domain.words into memory."""
+    engine = create_engine(database_url, future=True)
+    with engine.connect() as conn:
+        rows = conn.execute(text("SELECT word_id FROM domain.words")).scalars().all()
+    engine.dispose()
+    return set(rows)
+
+
+def make_bucket(endpoint: str, bucket_name: str, ak: str, sk: str) -> oss2.Bucket:
+    """Construct an oss2.Bucket client."""
+    auth = oss2.Auth(ak, sk)
+    return oss2.Bucket(auth, endpoint, bucket_name)
 
 
 def transform_body(
