@@ -361,3 +361,15 @@ def test_export_concurrent_modification_error(at_head):
         engine.begin() as conn,
     ):
         stage._upsert_app_words(conn, row_w)
+
+
+from wordforge.stages.export import _POS_MAP
+
+
+def test_pos_map_has_extended_keys():
+    """Spec §5.2: _POS_MAP must include num / art / phrasal_verb."""
+    assert _POS_MAP["num"] == 9
+    assert _POS_MAP["art"] == 10
+    assert _POS_MAP["phrasal_verb"] == 201
+    assert _POS_MAP["n"] == 1
+    assert _POS_MAP["interj"] == 8
