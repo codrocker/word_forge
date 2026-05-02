@@ -13,6 +13,8 @@ import logging
 import re
 from typing import Any
 
+from scripts.packaging.pos_map import pos_display
+
 _logger = logging.getLogger(__name__)
 
 _SEMI_RE = re.compile(r"[；;]")
@@ -54,3 +56,78 @@ def extract_mnemonic_text(content: Any) -> str:
         )
         return ""
     return text
+
+
+WordRow = dict[str, Any]
+MeaningRow = dict[str, Any]
+SentenceRow = dict[str, Any]
+MnemonicRow = dict[str, Any]
+
+
+def _phonetic_block(form: str | None, audio: str | None) -> dict[str, str]:
+    return {"form": form or "", "audio": audio or ""}
+
+
+def build_word_payload(
+    word: WordRow,
+    *,
+    meanings: list[MeaningRow],
+    sentences_by_mid: dict[int, list[SentenceRow]],
+    mnemonics: list[MnemonicRow],
+) -> dict[str, Any]:
+    """Compose one word-v1 JSON object. Pure function — no DB, no IO."""
+    ph_us = _phonetic_block(word.get("phonetic_us"), word.get("audio_us"))
+    ph_uk = _phonetic_block(word.get("phonetic_uk"), word.get("audio_uk"))
+    return {
+        "id": word["word_id"],
+        "type": word["type"],
+        "form": word["form"],
+        "phonetic_us": ph_us,
+        "phonetic_uk": ph_uk,
+        "meanings": [
+            _build_meaning(m, sentences_by_mid.get(m["meaning_id"], []), ph_us, ph_uk)
+            for m in meanings
+        ],
+        "mnemonics": [_build_mnemonic(mn) for mn in mnemonics],
+    }
+
+
+def _build_meaning(
+    m: MeaningRow,
+    sentences: list[SentenceRow],
+    ph_us: dict[str, str],
+    ph_uk: dict[str, str],
+) -> dict[str, Any]:
+    pos_en, pos_cn = pos_display(m.get("pos"))
+    return {
+        "id": m["meaning_id"],
+        "user_group": 0,
+        "pos_en": pos_en,
+        "pos_cn": pos_cn,
+        "phonetic_us": ph_us,
+        "phonetic_uk": ph_uk,
+        "pos_meanings": split_pos_meanings(m.get("cn_paraphrase")),
+        "sentences": [
+            {
+                "id": s["sentence_id"],
+                "user_group": 0,
+                "form": s["form"],
+                "meaning": s["translation"],
+                "audio": "",
+                "is_collected": 0,
+            }
+            for s in sentences
+        ],
+    }
+
+
+def _build_mnemonic(mn: MnemonicRow) -> dict[str, Any]:
+    # TODO(spec §13 Q1): creator shape to be confirmed by frontend
+    return {
+        "id": mn["mnemonic_id"],
+        "type": mn["type"],
+        "user_group": 0,
+        "creator": {},
+        "is_pinned": 0,
+        "content": extract_mnemonic_text(mn.get("content")),
+    }
