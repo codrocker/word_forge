@@ -58,16 +58,33 @@ def test_transform_already_shifted_returns_none():
     assert details == {}
 
 
-def test_transform_dead_letter_when_id_missing_from_valid_set():
+def test_transform_ok_filters_missing_ids():
+    """方案 A: 缺失 id 从 words 列表剔除,保留合法 id,package 正常上传."""
     valid = {100003}  # 只有 100003,缺 100063
+    body = _body([[1_000_000_003, 1_000_000_063]])
+
+    new_body, status, details = transform_body(body, valid_new_ids=valid)
+
+    assert status == "ok"
+    assert new_body is not None
+    parsed = json.loads(new_body)
+    got_ids = [w["id"] for u in parsed for w in u["words"]]
+    assert got_ids == [100003]  # 100063 被剔除
+    assert details["filtered_count"] == 1
+    assert details["filtered_unique_missing_count"] == 1
+    assert details["filtered_sample"] == [100063]
+
+
+def test_transform_dead_letter_when_all_ids_missing():
+    """所有 id 都不在 valid set -> kept_total=0 -> dead_letter."""
+    valid: set[int] = set()
     body = _body([[1_000_000_003, 1_000_000_063]])
 
     new_body, status, details = transform_body(body, valid_new_ids=valid)
 
     assert status == "dead_letter"
     assert new_body is None
-    assert details["missing_new_ids"] == [100063]
-    assert details["source_old_ids"] == [1_000_000_063]
+    assert details["filtered_unique_missing"] == [100003, 100063]
 
 
 def test_transform_raises_on_mixed_id_range():

@@ -67,8 +67,13 @@ OSS 凭证来源：一次性从 `words_core/.env` 的 `WORDS_CORE_OSS_*` 同步�
 行，~1MB 内存）。对每个 package，把减完 offset 的 new_id 集合和这个 set 求差：
 
 - 差为空 → 该 package 合法，进入写入阶段。
-- 差非空 → 写 `./oss_shift_dead_letter.jsonl`（`{package_id, missing_new_ids, source_old_ids}`），**不上传该 package**。
-- 起初 word_id 已经 < 10^9 → 标记 `already_shifted`，不下载不校验不写（跳过即可）。
+- **差非空但有合法 id**(**2026-05-02 dry-run 后决策**:方案 A 容忍缺失) → 把缺失 id 从
+  `u["words"]` 里移除,保留合法 id,正常 shift + 上传;details 里记录
+  `filtered_count / filtered_unique_missing` 便于审计。
+  **动因**:wordforge ingest 做过 casefold 去重,momo 原始 122664 词被压到 121057,
+  1607 个"洞"历史就在那里。OSS 保留这些 id 也没用,前端查后端会 404。
+- 差覆盖全部 id(清空后 package 为空) → 仍然 `dead_letter`,不上传。
+- 起初 word_id 已经 < 10^9 → 标记 `already_shifted`,不写(跳过即可,备份照做)。
 
 ## 5. 流程
 
