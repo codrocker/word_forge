@@ -12,6 +12,8 @@ git 库：`git@github.com:codrocker/word_forge.git`
 
 **本仓改到跨项目可见的 schema / 数据流时，必须同步更新 `../../docs/shared/data-flow.md`。** 本仓内部的 pipeline 细节、LLM 坑、DB 运维规矩（下方"硬规矩"）留在本文件，**不外泄**给其它仓。
 
+**Schema 设计硬规矩**:凡是要新建或修改数据表、讨论字段语义、写 DDL(不限 PG/MySQL/SQLite),**必须先 `lark-doc +fetch` 对应 wiki 页**,具体入口见 `../../docs/shared/feishu-wiki-index.md`。wiki 是组织的 schema 约定事实源,实例里 `SHOW CREATE TABLE` / `pg_dump` 只是当前状态的降级兜底。信任链 `代码 > wiki > 实例 DDL` —— wiki 常常领先于实例(新增字段、warning 如"临时设置 NULL"),只看实例会让新 schema 偏离组织约定。
+
 ## 硬规矩
 
 - **Prod/dev 数据库在阿里云 RDS,test 数据库在本地 docker**(物理隔离)。
