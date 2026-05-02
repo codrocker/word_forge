@@ -16,3 +16,7 @@ build/
 .DS_Store
 .idea/
 .vscode/
+
+# one-shot oss shift task (2026-05-02)
+/bak/
+/oss_shift_dead_letter.jsonl
