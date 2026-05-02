@@ -1,6 +1,9 @@
 # wordforge
 
-背单词 App 底层词条数据生产 pipeline。见 `docs/superpowers/specs/2026-04-28-wordforge-design.md`（ai_ark 仓库根）。
+背单词 App 底层词条数据生产 pipeline。
+
+跨项目背景（本仓在 monorepo 中的位置、数据流、schema 约束）：见 [`../../docs/shared/`](../../docs/shared/README.md)。
+本仓内部设计规约见 `CLAUDE.md`。
 
 ## 本地 Postgres 的定位
 

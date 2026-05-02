@@ -6,7 +6,7 @@
 
 ```bash
 # 1. Postgres
-cd /Users/allen/code/ai_ark/wordforge
+cd /Users/allen/code/jiyuan/backend/word_forge
 docker compose up -d   # wordforge-pg @ localhost:5433 (healthy)
 export DATABASE_URL=postgresql+psycopg://wordforge:wordforge@localhost:5433/wordforge
 

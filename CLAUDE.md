@@ -1,7 +1,17 @@
 # wordforge — Claude 指北
 
-gitp 库：
-git@github.com:codrocker/word_forge.git
+git 库：`git@github.com:codrocker/word_forge.git`
+
+## 跨项目先读
+
+本仓与 `words_core`、`sailing_words` 共享的事实（schema / 数据流 / 飞书 wiki）集中在：
+
+- [`../../docs/shared/data-flow.md`](../../docs/shared/data-flow.md) — `app.*` schema 约束，哪些表有 `updated_at`，`type`/`pos`/`word_id` 编码
+- [`../../docs/shared/cross-repo-map.md`](../../docs/shared/cross-repo-map.md) — 本仓在 monorepo 中的位置
+- [`../../docs/shared/feishu-wiki-index.md`](../../docs/shared/feishu-wiki-index.md) — schema 事实源（飞书 wiki）入口
+
+**本仓改到跨项目可见的 schema / 数据流时，必须同步更新 `../../docs/shared/data-flow.md`。** 本仓内部的 pipeline 细节、LLM 坑、DB 运维规矩（下方"硬规矩"）留在本文件，**不外泄**给其它仓。
+
 ## 硬规矩
 
 - **Prod/dev 数据库在阿里云 RDS,test 数据库在本地 docker**(物理隔离)。
