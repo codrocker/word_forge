@@ -97,7 +97,9 @@ CREATE TABLE `mnemonic` (
   `creator_id` bigint NOT NULL COMMENT 'LLM 产出填 0; 模型名写 source',
   `create_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `update_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `mnemonic_id` (`mnemonic_id`),
+  KEY `word_id` (`word_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 4.5 phrase
@@ -110,7 +112,9 @@ CREATE TABLE `phrase` (
   `audio_uk` varchar(255) NOT NULL,
   `create_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `update_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `phrase_id` (`phrase_id`),
+  KEY `form` (`form`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 4.6 Shadow 副本
