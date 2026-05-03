@@ -9,6 +9,8 @@
 - **事实源**:
   - Schema: [飞书 wiki - MySQL 数据模型和定义](https://lpt2q1lbzh.feishu.cn/wiki/wikcnQFiS6CvAj8sfXW86mK1d2G)(SSOT)
   - wordforge PG 数据: prod `rm-cn-*.rwlb.rds.aliyuncs.com:5432/wordforge` `domain.*`
+  - momo MySQL 实例版本: **5.7.28**(Ubuntu 18.04)—— 无 `ALGORITHM=INSTANT`,但
+    `RENAME TABLE` 多表原子切换 5.7 也支持,不影响本 spec 的 shadow-swap 方案
 
 ## 0. 相关文档 / 决策路径
 
