@@ -68,7 +68,19 @@ export WORDFORGE_MYSQL_READER_DSN='mysql+pymysql://wordforge_reader:<strong-pwd>
 
 ## 3. 一次性初始化(人工跑一次)
 
-### 3.1 建 database + 账号(需 MySQL root/DBA 身份)
+### 3.1 建 database + 账号(用 `user_service_1` 账号,无需 root)
+
+`user_service_1` 在 momo 实例上已有 `ALL PRIVILEGES ON *.* WITH GRANT OPTION`
+(`mysql -e "SHOW GRANTS FOR CURRENT_USER()"` 可验证),能直接 `CREATE DATABASE` /
+`CREATE USER` / `GRANT`。凭证在 `~/.wordforge/momo.env`。
+
+```bash
+source ~/.wordforge/momo.env
+mysql -h"$MOMO_MYSQL_HOST" -P"$MOMO_MYSQL_PORT" -u"$MOMO_MYSQL_USER" -p"$MOMO_MYSQL_PASSWORD" \
+  < scripts/replicate/init_database.sql
+```
+
+SQL 内容:
 
 ```sql
 CREATE DATABASE word_forge DEFAULT CHARSET utf8mb4 COLLATE utf8mb4_unicode_ci;

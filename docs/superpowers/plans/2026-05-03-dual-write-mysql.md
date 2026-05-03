@@ -1162,9 +1162,9 @@ git commit -m "feat(replicate): stage 4 count check + stage 5 summary"
 
 ---
 
-## Task 10: 初始化 + 首次实跑(手工验证,不写代码)
+## Task 10: 初始化 + 首次实跑
 
-**Files:** 无代码改动,纯 ops playbook 演练,用于验证 Task 1-9 在真实 MySQL 上可跑。
+**Files:** 无代码改动,纯 ops playbook,验证 Task 1-9 在真实 MySQL 上可跑。用 `user_service_1` 账号(ALL PRIVILEGES WITH GRANT OPTION,凭证在 `~/.wordforge/momo.env`),**无需 root**。
 
 - [ ] **Step 1: 准备 init_database.sql + 建库 + 建账号**
 
@@ -1175,7 +1175,9 @@ cp scripts/replicate/init_database.sql.example scripts/replicate/init_database.s
 # (两个密码分别生成,写下来)
 # init_database.sql 已被 .gitignore,不进仓
 
-mysql -h 120.27.242.42 -P 3306 -u root -p < scripts/replicate/init_database.sql
+source ~/.wordforge/momo.env
+mysql -h"$MOMO_MYSQL_HOST" -P"$MOMO_MYSQL_PORT" -u"$MOMO_MYSQL_USER" -p"$MOMO_MYSQL_PASSWORD" \
+  < scripts/replicate/init_database.sql
 ```
 
 Expected: `Query OK` 一系列,不报错。
