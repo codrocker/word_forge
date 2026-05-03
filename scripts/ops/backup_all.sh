@@ -22,7 +22,7 @@
 # kept for triage).
 #
 # Typical usage: add to a cron / launchd job. A sample plist lives at
-# scripts/com.wordforge.backup.plist — copy to ~/Library/LaunchAgents/
+# scripts/ops/com.wordforge.backup.plist — copy to ~/Library/LaunchAgents/
 # then `launchctl load` it.
 
 set -euo pipefail

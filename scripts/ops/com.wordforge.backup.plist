@@ -3,7 +3,7 @@
   Daily wordforge backup. macOS launchd agent sample.
 
   Install:
-    cp scripts/com.wordforge.backup.plist ~/Library/LaunchAgents/
+    cp scripts/ops/com.wordforge.backup.plist ~/Library/LaunchAgents/
     launchctl load ~/Library/LaunchAgents/com.wordforge.backup.plist
 
   Verify / tail:
@@ -25,11 +25,11 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/allen/code/ai_ark/wordforge/scripts/backup_all.sh</string>
+        <string>/Users/allen/code/jiyuan/backend/word_forge/scripts/ops/backup_all.sh</string>
     </array>
 
     <key>WorkingDirectory</key>
-    <string>/Users/allen/code/ai_ark/wordforge</string>
+    <string>/Users/allen/code/jiyuan/backend/word_forge</string>
 
     <key>EnvironmentVariables</key>
     <dict>

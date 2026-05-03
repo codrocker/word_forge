@@ -1,7 +1,5 @@
 """Pure functions that project flat DB rows → word-v1 nested dicts.
 
-Spec: docs/superpowers/specs/2026-05-02-sailing-sqlite-packager-design.md §3-§6
-
 Kept as pure functions (no DB, no IO) so the full mapping rules are unit-testable
 without Postgres. The CLI layer feeds pre-fetched rows in.
 """

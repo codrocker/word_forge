@@ -1,7 +1,7 @@
-"""PG domain.* -> MySQL word_forge mirror (one-shot).
+"""PG domain.* -> MySQL word_forge mirror.
 
-Spec: docs/superpowers/specs/2026-05-02-dual-write-mysql-design.md
-Plan: docs/superpowers/plans/2026-05-03-dual-write-mysql.md
+Full-refresh via shadow tables + atomic RENAME swap. Re-runnable; each run
+rebuilds the MySQL side from scratch against the current PG state.
 """
 
 from __future__ import annotations

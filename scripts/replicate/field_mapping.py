@@ -1,7 +1,4 @@
-"""Pure field-mapping functions: PG domain row -> MySQL word_forge row.
-
-Spec: docs/superpowers/specs/2026-05-02-dual-write-mysql-design.md §5
-"""
+"""Pure field-mapping functions: PG domain row -> MySQL word_forge row."""
 
 from __future__ import annotations
 

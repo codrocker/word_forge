@@ -1,10 +1,8 @@
 """CLI: export prod domain.* → flutter-friendly SQLite zip.
 
-Spec: docs/superpowers/specs/2026-05-02-sailing-sqlite-packager-design.md
-
 Usage:
     source ~/.wordforge/prod.env
-    ./.venv/bin/python scripts/packaging/export_sailing_sqlite.py \\
+    ./.venv/bin/python -m scripts.packaging.export_sailing_sqlite \\
         [--output PATH] [--limit N] [--dry-run]
 """
 

@@ -14,13 +14,12 @@ test: test-db-up
 # Start the test container + migrate. Stops short of running tests so CI
 # can parallelize.
 test-db-up:
-	./scripts/bootstrap_test_db.sh
+	./scripts/ops/bootstrap_test_db.sh
 
-# Stop + remove the test container. Does NOT remove the volume — use
-# `docker compose -f docker-compose.test.yml down -v` if you really want
-# to wipe test data.
+# Stop the test container. Does NOT remove the volume — use
+# `docker compose down -v` if you really want to wipe test data.
 test-db-down:
-	docker compose -f docker-compose.test.yml down
+	docker compose down
 
 lint:
 	uv run ruff check .

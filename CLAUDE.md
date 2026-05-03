@@ -116,9 +116,9 @@ git 库：`git@github.com:codrocker/word_forge.git`
 - `app.meanings` / `app.mnemonics` / `app.sentences` **没有** `updated_at` 列,只有 `app.words` 有。
   `UPDATE ... SET x=:v, updated_at=now()` 这种抄过来就 UndefinedColumn。
 - `app.words.word_id` 由 BIGSERIAL 分配,sequence 从 100001 起(migration 0005)。
-  不再存外部系统的 word_id —— 需要"跟 momo 顺序大致对齐"时,让 ingest 按 momo
-  word_id 排序的 word_list 输入,BIGSERIAL 自然按插入顺序递增,并发下会有轻微
-  乱序但足够。`recover_from_momo.py` 的 MySQL dump 加了 `ORDER BY word_id`。
+  不再存外部系统的 word_id —— 需要"跟 momo 顺序大致对齐"时,让 ingest 输入按
+  momo `word_id` 排好序(MySQL dump 加 `ORDER BY word_id`),BIGSERIAL 按插入
+  顺序递增即可,并发下会有轻微乱序但足够。
 - `type` 字段:1=单词,2=phrase。`pos` 字段:1-10 + 201=phrasal verb。两个独立。
 
 ## 常用诊断命令

@@ -71,8 +71,7 @@ parser_version = "1"
 prompt_version = "v1"
 provider = "bedrock"
 # Creative phonetic-pun generation — highest-value field; quality 2× weight.
-# 2026-05-01 blind shootout (scripts/mnemonic_shootout.py, 50 words, opus-4-7
-# judge) produced:
+# 2026-05-01 blind shootout (50 words, opus-4-7 judge) produced:
 #   flash  avg 2.96 / 12 wins / $6   full-batch
 #   qwen   avg 3.17 / 17 wins / $149
 #   sonnet avg 3.39 / 15 wins / $312   ← chosen

@@ -41,7 +41,7 @@ make test-db-up
 make test-db-down
 ```
 
-`scripts/bootstrap_test_db.sh` 是 make 背后的脚本，可单独跑。
+`scripts/ops/bootstrap_test_db.sh` 是 make 背后的脚本，可单独跑。
 新增 LLM provider 后记得把它的 env key 加进 `tests/test_cli.py` 的
 `_LLM_PROVIDER_ENV_KEYS`，否则 "skip LLM stages" 测试会因环境泄漏而失败。
 

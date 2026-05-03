@@ -1,7 +1,4 @@
-"""POS reverse mapping: domain.meanings.pos (SMALLINT) → word-v1 strings.
-
-Spec: docs/superpowers/specs/2026-05-02-sailing-sqlite-packager-design.md §5.1
-"""
+"""POS reverse mapping: domain.meanings.pos (SMALLINT) → word-v1 strings."""
 
 from __future__ import annotations
 

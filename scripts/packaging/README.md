@@ -19,8 +19,7 @@ source ~/.wordforge/prod.env  # 载入 prod 只读 DATABASE_URL
 默认输出到
 `/Users/allen/code/jiyuan/frontent/sailing_words/assets/database/words.db.zip`。
 
-也支持 `.venv/bin/python scripts/packaging/export_sailing_sqlite.py`
-直接路径跑(脚本内部会把 repo 根加进 sys.path)。
+必须用 `-m` 模块模式跑,直接路径会 `ModuleNotFoundError: scripts`(CLAUDE.md 硬约定)。
 
 ## 参数
 
@@ -41,7 +40,7 @@ CREATE TABLE word (
 
 `word_json` 遵循 **word-v1** 约定,schema 事实源在飞书 wiki
 `https://lpt2q1lbzh.feishu.cn/wiki/U0w0wzWvdihbH1kUYltc1kjPn6c`,
-字段映射详见 `../../docs/superpowers/specs/2026-05-02-sailing-sqlite-packager-design.md`。
+字段映射以 `builder.py` / `pos_map.py` 为准。
 
 ## 坑 & 约定
 
@@ -53,10 +52,9 @@ CREATE TABLE word (
   `scripts/packaging/pos_map.py::_POS_DISPLAY` 是对偶关系。
 - **zip 内条目名是 `words.db`**:旧版前端读的是 `sailing.db`;前端仓库要同步
   把资产路径改成 `words.db`。
-- **Q1 `mnemonics[].creator` 先固定 `{}`**:等前端给出具体 shape 后回填;
-  见 spec §13 TODO。
+- **Q1 `mnemonics[].creator` 先固定 `{}`**:等前端给出具体 shape 后回填。
 - **运行时 SQLite pragma**(VACUUM / page_size / journal_mode=DELETE)未启用;
-  等前端实测 flutter 端启动/查询耗时基线后再开;见 spec §7.1 TODO。
+  等前端实测 flutter 端启动/查询耗时基线后再开。
 
 ## 范围与边界
 

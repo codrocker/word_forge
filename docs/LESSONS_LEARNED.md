@@ -9,7 +9,8 @@
 
 ### 1. 嵌套 ThreadPoolExecutor 饿死 asyncio event loop(8 小时零进度)
 
-**现象**:`scripts/review_and_fix.py` 启动后 8 小时 42 分 CPU 5%、log 345 字节、jsonl 0 行,
+**现象**:当时的 `scripts/review_and_fix.py`(已迁入 `src/wordforge/reviewer/`)
+启动后 8 小时 42 分 CPU 5%、log 345 字节、jsonl 0 行,
 但 `external_call_cache` 持续写入(~400/min),`lsof` 20+ ESTABLISHED 到代理。
 
 **诊断**:外层 `ThreadPoolExecutor(10 words)` 里嵌 `ThreadPoolExecutor(5 checkers)` = 60 个
