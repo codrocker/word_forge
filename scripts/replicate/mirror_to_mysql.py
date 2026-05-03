@@ -264,7 +264,25 @@ def _stage2_load_shadow(pg_engine, my_engine) -> dict[str, int]:
 
 
 def _stage3_swap(my_engine) -> None:
-    raise NotImplementedError("Task 8")
+    """Atomic shadow swap per spec §6 stage 3.
+
+    Statement A: main -> _old, shadow -> main (single atomic RENAME).
+    Statement B: _old -> _shadow (frees slot for next run).
+    """
+    _log("stage 3: atomic RENAME swap ...")
+    stmt_a = ",".join(
+        f" `{t}` TO `{t}_old`, `{t}_shadow` TO `{t}`"
+        for t in TABLES
+    )
+    stmt_b = ",".join(
+        f" `{t}_old` TO `{t}_shadow`"
+        for t in TABLES
+    )
+    with my_engine.begin() as conn:
+        conn.execute(text(f"RENAME TABLE{stmt_a}"))
+        _log("  statement A committed (main+shadow swapped)")
+        conn.execute(text(f"RENAME TABLE{stmt_b}"))
+        _log("  statement B committed (_old -> _shadow)")
 
 
 def _stage4_count_check(pg_engine, my_engine, counts: dict[str, int], *, dry_run: bool) -> list[str]:
