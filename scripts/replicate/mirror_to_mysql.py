@@ -12,7 +12,7 @@ import sys
 import time
 from pathlib import Path
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 
 # ruff: noqa: E501
 
@@ -53,11 +53,33 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def _stage0_sanity(pg_engine, my_engine) -> None:
-    raise NotImplementedError("Task 6")
+    """Verify every expected table + shadow exists; drop stale *_old if any."""
+    _log("stage 0: sanity check PG + MySQL tables ...")
+    with pg_engine.connect() as conn:
+        for t in TABLES:
+            pg_t = f"domain.{t}s" if t != "phrase" else "domain.phrases"
+            conn.execute(text(f"SELECT 1 FROM {pg_t} LIMIT 0"))
+    _log("  PG domain.* tables OK")
+
+    with my_engine.begin() as conn:
+        # main + shadow must exist
+        for t in TABLES:
+            for name in (t, f"{t}_shadow"):
+                conn.execute(text(f"SELECT 1 FROM `{name}` LIMIT 0"))
+        # clean up *_old leftovers from a crashed previous run
+        rows = conn.execute(text("SHOW TABLES LIKE '%_old'")).all()
+        for (name,) in rows:
+            _log(f"  dropping stale {name}")
+            conn.execute(text(f"DROP TABLE `{name}`"))
+    _log("  MySQL main + shadow tables OK")
 
 
 def _stage1_truncate_shadow(my_engine) -> None:
-    raise NotImplementedError("Task 6")
+    _log("stage 1: TRUNCATE shadow tables ...")
+    with my_engine.begin() as conn:
+        for t in TABLES:
+            conn.execute(text(f"TRUNCATE TABLE `{t}_shadow`"))
+    _log("  shadows cleared")
 
 
 def _stage2_load_shadow(pg_engine, my_engine) -> dict[str, int]:
