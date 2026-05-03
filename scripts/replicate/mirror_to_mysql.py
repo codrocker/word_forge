@@ -7,6 +7,7 @@ Plan: docs/superpowers/plans/2026-05-03-dual-write-mysql.md
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 import time
@@ -285,12 +286,50 @@ def _stage3_swap(my_engine) -> None:
         _log("  statement B committed (_old -> _shadow)")
 
 
-def _stage4_count_check(pg_engine, my_engine, counts: dict[str, int], *, dry_run: bool) -> list[str]:
-    raise NotImplementedError("Task 9")
+def _stage4_count_check(
+    pg_engine, my_engine, counts: dict[str, int], *, dry_run: bool
+) -> list[str]:
+    """Compare PG domain.* vs MySQL main (post-swap).
+
+    In dry-run we compare shadow instead of main, since swap didn't happen.
+    """
+    _log("stage 4: count check ...")
+    mismatches: list[str] = []
+    target_suffix = "_shadow" if dry_run else ""
+    with pg_engine.connect() as pg_conn, my_engine.connect() as my_conn:
+        for t in TABLES:
+            pg_table = f"domain.{t}s" if t != "phrase" else "domain.phrases"
+            pg_n = pg_conn.execute(text(f"SELECT count(*) FROM {pg_table}")).scalar_one()
+            my_n = my_conn.execute(
+                text(f"SELECT count(*) FROM `{t}{target_suffix}`")
+            ).scalar_one()
+            if pg_n != my_n:
+                msg = f"{t}: PG={pg_n} MySQL={my_n} (loaded={counts.get(t)})"
+                _log(f"  MISMATCH {msg}")
+                mismatches.append(msg)
+            else:
+                _log(f"  OK {t}: {pg_n}")
+    return mismatches
 
 
-def _stage5_summary(counts: dict[str, int], mismatches: list[str], run_log: Path, *, dry_run: bool) -> None:
-    raise NotImplementedError("Task 9")
+def _stage5_summary(
+    counts: dict[str, int],
+    mismatches: list[str],
+    run_log: Path,
+    *,
+    dry_run: bool,
+) -> None:
+    _log(f"stage 5: summary counts={counts} mismatches={len(mismatches)}")
+    record = {
+        "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "dry_run": dry_run,
+        "counts": counts,
+        "mismatches": mismatches,
+    }
+    with run_log.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    if mismatches:
+        print(f"WARN drift detected: {mismatches}", file=sys.stderr, flush=True)
 
 
 def main(argv: list[str] | None = None) -> int:
