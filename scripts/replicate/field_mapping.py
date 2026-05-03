@@ -52,3 +52,91 @@ def row_to_mysql_word(
         "source": pg.get("source"),
         "status": 1,
     }
+
+
+def row_to_mysql_meaning(pg: dict, *, sentence_ids: list[int]) -> dict:
+    """Map one domain.meanings row + its sentence id list."""
+    equivalents_raw = pg.get("equivalents")
+    equivalents_json = (
+        json.dumps(equivalents_raw, ensure_ascii=False, separators=(",", ":"))
+        if equivalents_raw else None
+    )
+    synonyms_raw = pg.get("synonyms")
+    synonyms_json = (
+        json.dumps(synonyms_raw, ensure_ascii=False, separators=(",", ":"))
+        if synonyms_raw else None
+    )
+    antonyms_raw = pg.get("antonyms")
+    antonyms_json = (
+        json.dumps(antonyms_raw, ensure_ascii=False, separators=(",", ":"))
+        if antonyms_raw else None
+    )
+    return {
+        "meaning_id": pg["meaning_id"],
+        "word_id": pg["word_id"],
+        "user_group": None,
+        "pos": pg.get("pos"),
+        "pos_sub": None,
+        "equivalents": equivalents_json,
+        "synonyms": synonyms_json,
+        "antonyms": antonyms_json,
+        "phonetic_us": pg.get("phonetic_us"),
+        "audio_us": pg.get("audio_us"),
+        "phonetic_uk": pg.get("phonetic_uk"),
+        "audio_uk": pg.get("audio_uk"),
+        "cn_paraphrase": pg.get("cn_paraphrase"),
+        "en_paraphrase": pg.get("en_paraphrase"),
+        "sentences": _id_list_to_json(sentence_ids, key="sentence_id"),
+        "source": pg.get("source"),
+    }
+
+
+def row_to_mysql_sentence(pg: dict) -> dict:
+    """Map one domain.sentences row."""
+    highlight = pg.get("highlight")
+    highlight_json = (
+        json.dumps(highlight, separators=(",", ":")) if highlight else None
+    )
+    return {
+        "sentence_id": pg["sentence_id"],
+        "word_id": pg["word_id"],
+        "meaning_id": pg["meaning_id"],
+        "user_group": None,
+        "form": pg.get("form"),
+        "highlight": highlight_json,
+        "translation": pg["translation"],
+        "audio_us": None,
+        "audio_uk": None,
+        "source": pg.get("source"),
+        "citation": None,
+        "citation_detail": None,
+    }
+
+
+def row_to_mysql_mnemonic(pg: dict) -> dict:
+    """Map one domain.mnemonics row."""
+    content = pg["content"]
+    content_json = (
+        json.dumps(content, ensure_ascii=False, separators=(",", ":"))
+        if isinstance(content, dict) else str(content)
+    )
+    return {
+        "mnemonic_id": pg["mnemonic_id"],
+        "word_id": pg["word_id"],
+        "type": pg["type"],
+        "user_group": 0,
+        "content": content_json,
+        "source": pg.get("source"),
+        "creator_id": 0,
+    }
+
+
+def row_to_mysql_phrase(pg: dict) -> dict:
+    """Map one domain.phrases row."""
+    return {
+        "phrase_id": pg["phrase_id"],
+        "form": pg["form"],
+        "meaning": pg["meaning"],
+        "audio_us": pg.get("audio_us") or "",
+        "audio_uk": pg.get("audio_uk") or "",
+    }
