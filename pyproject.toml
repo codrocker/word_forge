@@ -14,6 +14,8 @@ dependencies = [
   "google-auth>=2.0",
   "openai>=1.50",
   "oss2>=2.18",
+  "pymysql>=1.1",
+  "cryptography>=42",
 ]
 
 [project.optional-dependencies]

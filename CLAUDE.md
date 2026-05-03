@@ -12,6 +12,30 @@ git 库：`git@github.com:codrocker/word_forge.git`
 
 **本仓改到跨项目可见的 schema / 数据流时，必须同步更新 `../../docs/shared/data-flow.md`。** 本仓内部的 pipeline 细节、LLM 坑、DB 运维规矩（下方"硬规矩"）留在本文件，**不外泄**给其它仓。
 
+**Schema 设计硬规矩**:凡是要新建或修改数据表、讨论字段语义、写 DDL(不限 PG/MySQL/SQLite),**必须先 `lark-doc +fetch` 对应 wiki 页**,具体入口见 `../../docs/shared/feishu-wiki-index.md`。wiki 是组织的 schema 约定事实源,实例里 `SHOW CREATE TABLE` / `pg_dump` 只是当前状态的降级兜底。信任链 `代码 > wiki > 实例 DDL` —— wiki 常常领先于实例(新增字段、warning 如"临时设置 NULL"),只看实例会让新 schema 偏离组织约定。
+
+**长文档分批写硬规矩**:单次 `Write` / `Edit` 输出 **超过 ~150 行**会触发 socket timeout / "connection closed unexpectedly"。正确做法:先 `Write` 骨架(header + 前 1-2 节),之后用 `Edit` 追加式每次加 100-150 行。适用场景:design spec / implementation plan / 长 README / 大型测试文件。不要偷懒一次写完。
+
+## 如何访问外部资源(凭证全在 `~/.wordforge/`,chmod 600,不进 git)
+
+访问任何 prod / 外部资源前 **先看下表查对应 env 文件是否已经有**,再决定是否新建。
+`~/.wordforge/` 是本机所有 wordforge 相关凭证的唯一事实源,**不要**在代码里硬编码凭证,
+**不要**自建新文件,**不要**让用户"手工跑 root 命令"——检查已有账号权限通常就够用。
+
+| 资源 | env 文件 | 变量 | 权限/用途 |
+|---|---|---|---|
+| PG prod wordforge RDS | `~/.wordforge/prod.env` | `DATABASE_URL` | 读写 `domain.*` / `serving.*` / `pipeline.*` |
+| PG test 本地 docker | (用 `export DATABASE_URL=postgresql+psycopg://wordforge:wordforge@localhost:5433/wordforge_test`) | — | pytest 专用,conftest guard 拒绝任何非本地+含 test 的 URL |
+| momo MySQL `word` 库 | `~/.wordforge/momo.env` | `MOMO_MYSQL_HOST / PORT / USER / PASSWORD / DB` | 账号 `user_service_1` 在 MySQL 实例上有 **`ALL PRIVILEGES ON *.* WITH GRANT OPTION`** —— 可以 `CREATE DATABASE` / `CREATE USER` / `GRANT`,不需要 root 密码。验证: `mysql ... -e "SHOW GRANTS FOR CURRENT_USER()"` |
+| MySQL `word_forge` 库 写账号 | `~/.wordforge/mysql_writer.env` | `WORDFORGE_MYSQL_WRITER_DSN` | 账号 `wordforge_writer`, CRUD + DDL on `word_forge.*`,供 `scripts/replicate/mirror_to_mysql.py` |
+| MySQL `word_forge` 库 读账号 | `~/.wordforge/mysql_reader.env` | `WORDFORGE_MYSQL_READER_DSN` | `wordforge_reader`,`SELECT` only,供对账 / gozero |
+| OSS `sailing-words-package-words` | `~/.wordforge/oss.env` | `OSS_ENDPOINT / OSS_BUCKET / OSS_ACCESS_KEY_ID / OSS_ACCESS_KEY_SECRET` | 读写词包 JSON |
+| Bedrock / LLM 凭证 | `~/.wordforge/prod.env` 里(AWS_* / OPENAI_API_KEY 等) | 按 provider | 各 completer 读 |
+
+新凭证只要 append 一个新 env 文件,不要改已有文件的语义;脚本里 `source ~/.wordforge/xxx.env`
+然后读 env var,不要用 `--as root / sudo mysql -u root`。任何一条命令如果你想说"需要
+root/DBA",先查 `user_service_1` 权限或 PG 的 `wordforge` 超级用户——十有八九已经够用。
+
 ## 硬规矩
 
 - **Prod/dev 数据库在阿里云 RDS,test 数据库在本地 docker**(物理隔离)。

@@ -1,0 +1,20 @@
+-- scripts/replicate/init_database.sql.example
+-- Copy to init_database.sql, fill <pwd-writer> / <pwd-reader> (openssl rand -base64 24),
+-- then run once via user_service_1 (has ALL PRIVILEGES WITH GRANT OPTION,
+-- verified via SHOW GRANTS; no root password needed):
+--   source ~/.wordforge/momo.env
+--   mysql -h"$MOMO_MYSQL_HOST" -P"$MOMO_MYSQL_PORT" -u"$MOMO_MYSQL_USER" -p"$MOMO_MYSQL_PASSWORD" \
+--     < scripts/replicate/init_database.sql
+-- init_database.sql is gitignored; .example is the only thing in the repo.
+
+CREATE DATABASE IF NOT EXISTS word_forge
+  DEFAULT CHARSET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE USER IF NOT EXISTS 'wordforge_writer'@'%' IDENTIFIED BY '<pwd-writer>';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX
+  ON word_forge.* TO 'wordforge_writer'@'%';
+
+CREATE USER IF NOT EXISTS 'wordforge_reader'@'%' IDENTIFIED BY '<pwd-reader>';
+GRANT SELECT ON word_forge.* TO 'wordforge_reader'@'%';
+
+FLUSH PRIVILEGES;
