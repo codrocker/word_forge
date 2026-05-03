@@ -24,8 +24,12 @@ TABLES = [
                                     "CONCAT_WS('|', word_id, form, type, IFNULL(source, ''))"),
     ("meaning",  "domain.meanings",  "meaning_id || '|' || word_id || '|' || coalesce(pos::text, '') || '|' || coalesce(cn_paraphrase, '')",
                                     "CONCAT_WS('|', meaning_id, word_id, IFNULL(pos, ''), IFNULL(cn_paraphrase, ''))"),
-    ("sentence", "domain.sentences", "sentence_id || '|' || word_id || '|' || coalesce(form, '')",
-                                    "CONCAT_WS('|', sentence_id, word_id, IFNULL(form, ''))"),
+    # domain.sentences 没有 word_id 列; 用 JOIN 到 meanings 拿 word_id
+    ("sentence",
+     "(SELECT s.sentence_id, m.word_id, s.form FROM domain.sentences s "
+     "JOIN domain.meanings m ON s.meaning_id = m.meaning_id) sv",
+     "sentence_id || '|' || word_id || '|' || coalesce(form, '')",
+     "CONCAT_WS('|', sentence_id, word_id, IFNULL(form, ''))"),
     ("mnemonic", "domain.mnemonics", "mnemonic_id || '|' || word_id || '|' || type::text",
                                     "CONCAT_WS('|', mnemonic_id, word_id, type)"),
     ("phrase",   "domain.phrases",   "phrase_id || '|' || form",

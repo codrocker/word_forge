@@ -29,15 +29,20 @@ TABLES = ["word", "meaning", "sentence", "mnemonic", "phrase"]
 
 _WORD_COLS = "word_id, type, form, phonetic_us, audio_us, phonetic_uk, audio_uk, source"
 _MEANING_COLS = (
-    "meaning_id, word_id, pos, equivalents, synonyms, antonyms, "
-    "phonetic_us, audio_us, phonetic_uk, audio_uk, "
+    "meaning_id, word_id, pos, pos_sub, equivalents, synonyms, antonyms, "
     "cn_paraphrase, en_paraphrase, source"
 )
-_SENTENCE_COLS = (
-    "sentence_id, word_id, meaning_id, form, translation, highlight, source"
+# domain.sentences 无 word_id / audio_* 列; 通过 JOIN domain.meanings 拿 word_id.
+# citation / citation_detail PG 就有,直接用.
+_SENTENCE_SELECT = (
+    "SELECT s.sentence_id, m.word_id, s.meaning_id, s.form, s.translation, "
+    "s.highlight, s.source, s.citation, s.citation_detail "
+    "FROM domain.sentences s "
+    "JOIN domain.meanings m ON s.meaning_id = m.meaning_id "
+    "ORDER BY s.sentence_id"
 )
 _MNEMONIC_COLS = "mnemonic_id, word_id, type, content, source"
-_PHRASE_COLS = "phrase_id, owner_word_id, form, meaning"
+_PHRASE_COLS = "phrase_id, owner_word_id AS word_id, form, meaning"
 
 
 def _insert_sql(table: str, cols: list[str]) -> str:
@@ -234,7 +239,7 @@ def _stage2_load_shadow(pg_engine, my_engine) -> dict[str, int]:
     counts["sentence"] = _stream_and_insert(
         pg_engine, my_engine,
         table="sentence",
-        select_sql=f"SELECT {_SENTENCE_COLS} FROM domain.sentences ORDER BY sentence_id",
+        select_sql=_SENTENCE_SELECT,
         row_to_mysql=row_to_mysql_sentence,
         insert_sql=_insert_sql("sentence", sentence_cols_out),
     )

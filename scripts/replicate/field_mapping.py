@@ -108,8 +108,8 @@ def row_to_mysql_sentence(pg: dict) -> dict:
         "audio_us": None,
         "audio_uk": None,
         "source": pg.get("source"),
-        "citation": None,
-        "citation_detail": None,
+        "citation": pg.get("citation"),
+        "citation_detail": pg.get("citation_detail"),
     }
 
 
