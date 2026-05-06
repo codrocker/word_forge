@@ -13,6 +13,8 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from wordforge.reviewer.patch import PatchDriftError
+
 logger = logging.getLogger(__name__)
 
 
@@ -58,6 +60,13 @@ def register_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=400,
             content=envelope_err("invalid_input", str(exc)),
+        )
+
+    @app.exception_handler(PatchDriftError)
+    async def _drift(request: Request, exc: PatchDriftError):
+        return JSONResponse(
+            status_code=409,
+            content=envelope_err("conflict", str(exc)),
         )
 
     @app.exception_handler(Exception)

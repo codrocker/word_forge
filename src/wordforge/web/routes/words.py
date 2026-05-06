@@ -1,13 +1,16 @@
-"""Words read-only routes: search + detail (M3)."""
+"""Words routes: search + detail (M3) + patch (M4.3)."""
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
+from wordforge.db.serving import rebuild_word_payload
 from wordforge.web.cursor import decode as decode_cursor, encode as encode_cursor
 from wordforge.web.deps import current_editor, get_engine
 from wordforge.web.errors import envelope_ok
+from wordforge.web.schemas.words import PatchRequest
+from wordforge.web.services.word_service import apply_web_changes
 
 router = APIRouter(prefix="/api/v1/words", dependencies=[Depends(current_editor)])
 
@@ -116,3 +119,29 @@ def detail(word_id: int, engine: Engine = Depends(get_engine)):
             "phrases": [dict(p) for p in phrases],
         }
     )
+
+
+@router.patch("/{word_id}")
+def patch_word(
+    word_id: int,
+    body: PatchRequest,
+    editor: dict = Depends(current_editor),
+    engine: Engine = Depends(get_engine),
+):
+    with engine.begin() as conn:
+        exists = conn.execute(
+            text("SELECT 1 FROM domain.words WHERE word_id = :w"),
+            {"w": word_id},
+        ).first()
+        if exists is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="word not found"
+            )
+        applied = apply_web_changes(
+            conn,
+            word_id=word_id,
+            editor_id=editor["id"],
+            changes=[c.model_dump() for c in body.changes],
+        )
+        rebuild_word_payload(conn, word_id)
+    return envelope_ok({"applied": applied})

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
@@ -28,3 +28,15 @@ class WordDetailResponse(BaseModel):
     mnemonics: list[dict[str, Any]]
     sentences: list[dict[str, Any]]
     phrases: list[dict[str, Any]]
+
+
+class PatchChange(BaseModel):
+    field_path: str
+    target_id: int | None = None
+    op: Literal["update"]  # M4.3 MVP: update only
+    old_value: Any
+    new_value: Any
+
+
+class PatchRequest(BaseModel):
+    changes: list[PatchChange]
