@@ -23,6 +23,8 @@ FIELD_MAP: dict[str, tuple[str, str, bool]] = {
     "words.form": ("domain.words", "form", True),
     "words.phonetic_us": ("domain.words", "phonetic_us", True),
     "words.phonetic_uk": ("domain.words", "phonetic_uk", True),
+    "words.status": ("domain.words", "status", True),
+    "words.quality_flag": ("domain.words", "quality_flag", True),
     # domain.meanings / mnemonics / sentences: NO updated_at (CLAUDE.md hard rule)
     "meanings.cn_paraphrase": ("domain.meanings", "cn_paraphrase", False),
     "meanings.en_paraphrase": ("domain.meanings", "en_paraphrase", False),

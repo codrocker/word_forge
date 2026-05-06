@@ -40,3 +40,13 @@ class PatchChange(BaseModel):
 
 class PatchRequest(BaseModel):
     changes: list[PatchChange]
+
+
+class StatusChangeRequest(BaseModel):
+    old_value: Literal[0, 1, 2]
+    new_value: Literal[0, 1, 2]
+
+
+class QualityChangeRequest(BaseModel):
+    old_value: Literal["none", "suspect", "fixed"]
+    new_value: Literal["none", "suspect", "fixed"]

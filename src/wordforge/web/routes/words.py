@@ -9,7 +9,7 @@ from wordforge.db.serving import rebuild_word_payload
 from wordforge.web.cursor import decode as decode_cursor, encode as encode_cursor
 from wordforge.web.deps import current_editor, get_engine
 from wordforge.web.errors import envelope_ok
-from wordforge.web.schemas.words import PatchRequest
+from wordforge.web.schemas.words import PatchRequest, QualityChangeRequest, StatusChangeRequest
 from wordforge.web.services.word_service import apply_web_changes
 
 router = APIRouter(prefix="/api/v1/words", dependencies=[Depends(current_editor)])
@@ -145,3 +145,71 @@ def patch_word(
         )
         rebuild_word_payload(conn, word_id)
     return envelope_ok({"applied": applied})
+
+
+@router.post("/{word_id}/status")
+def change_status(
+    word_id: int,
+    body: StatusChangeRequest,
+    editor: dict = Depends(current_editor),
+    engine: Engine = Depends(get_engine),
+):
+    with engine.begin() as conn:
+        exists = conn.execute(
+            text("SELECT 1 FROM domain.words WHERE word_id = :w"),
+            {"w": word_id},
+        ).first()
+        if exists is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="word not found"
+            )
+        apply_web_changes(
+            conn,
+            word_id=word_id,
+            editor_id=editor["id"],
+            changes=[
+                {
+                    "field_path": "words.status",
+                    "target_id": None,
+                    "op": "update",
+                    "old_value": body.old_value,
+                    "new_value": body.new_value,
+                }
+            ],
+        )
+        rebuild_word_payload(conn, word_id)
+    return envelope_ok(None)
+
+
+@router.post("/{word_id}/quality")
+def change_quality(
+    word_id: int,
+    body: QualityChangeRequest,
+    editor: dict = Depends(current_editor),
+    engine: Engine = Depends(get_engine),
+):
+    with engine.begin() as conn:
+        exists = conn.execute(
+            text("SELECT 1 FROM domain.words WHERE word_id = :w"),
+            {"w": word_id},
+        ).first()
+        if exists is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="word not found"
+            )
+        apply_web_changes(
+            conn,
+            word_id=word_id,
+            editor_id=editor["id"],
+            changes=[
+                {
+                    "field_path": "words.quality_flag",
+                    "target_id": None,
+                    "op": "update",
+                    "old_value": body.old_value,
+                    "new_value": body.new_value,
+                }
+            ],
+        )
+        rebuild_word_payload(conn, word_id)
+    return envelope_ok(None)
