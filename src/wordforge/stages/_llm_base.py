@@ -15,9 +15,9 @@ from importlib import resources
 
 
 def load_prompt(stage: str, version: str) -> str:
-    ref = resources.files("wordforge.configs.prompts") / stage / f"{version}.md"
+    ref = resources.files("wordforge.resources.prompts") / stage / f"{version}.md"
     if not ref.is_file():
-        raise FileNotFoundError(f"prompt not found: configs/prompts/{stage}/{version}.md")
+        raise FileNotFoundError(f"prompt not found: resources/prompts/{stage}/{version}.md")
     return ref.read_text(encoding="utf-8")
 
 

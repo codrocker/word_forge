@@ -100,7 +100,7 @@ def run_cmd(
     stage: str | None = typer.Option(
         None,
         "--stage",
-        help="Limit run to a single stage (must be present in configs/default.toml).",
+        help="Limit run to a single stage (must be present in resources/default.toml).",
     ),
     word: str | None = typer.Option(
         None, "--word", help="Limit run to a single word (normalized form). Must belong to --batch."
@@ -184,7 +184,7 @@ def run_cmd(
 
         artifacts_store = StageArtifactStore(engine)
         # Merge every provider whose credentials are present. Stages pick the
-        # one named in configs/default.toml `[stages.<name>].provider`; this
+        # one named in resources/default.toml `[stages.<name>].provider`; this
         # way swapping a stage's provider is a TOML-only change.
         completers: dict = {}
         for register in (

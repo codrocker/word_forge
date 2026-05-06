@@ -15,7 +15,7 @@ filesystem. Called by:
 
 Spec §10 #11: `code_hash` is deliberately NOT an input. A ruff format pass or
 comment edit must never invalidate 10万词 of fingerprints. Behavior changes in
-parser code are signalled by bumping `parser_version` in configs/default.toml
+parser code are signalled by bumping `parser_version` in resources/default.toml
 (handled by P5 stage config loading).
 """
 

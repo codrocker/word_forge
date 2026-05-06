@@ -99,7 +99,7 @@ pytest 和长运维。整套放 CLAUDE.md 和 `TODO.md` P0。
 - 中途 kill,derivatives/examples/mnemonic 三个下游 stage 切到 Gemini 2.5 Flash
   (~$0.0002/词 vs Bedrock $0.0086/词 = 45x 便宜),完成全量成本降到 ~$150。
 - 新加 `src/wordforge/llm/pricing.py` 作为 25+ 模型价格单一来源,`compute_cost()` 调用。
-- `configs/default.toml` 每个 stage 的 `cost_estimate_usd` 是部署前就该估算的字段,长跑
+- `resources/default.toml` 每个 stage 的 `cost_estimate_usd` 是部署前就该估算的字段,长跑
   前先乘以 N_words 算总价,超过 $100 先问。
 
 **长期方向**:`wordforge plan --stage X` 不只看 cache hit 率,还要按 `cost_estimate_usd ×

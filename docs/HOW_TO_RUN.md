@@ -125,7 +125,7 @@ uv run wordforge dlq replay --word-id 42
 unset AWS_BEARER_TOKEN_BEDROCK AWS_ACCESS_KEY_ID
 export ANTHROPIC_API_KEY=sk-...
 uv pip install anthropic
-# 然后改 src/wordforge/configs/default.toml 里每个 LLM stage:
+# 然后改 src/wordforge/resources/default.toml 里每个 LLM stage:
 #   provider = "anthropic"
 #   model = "claude-opus-4-20250514"  (or whatever Anthropic SDK accepts)
 ```

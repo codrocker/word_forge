@@ -15,12 +15,12 @@ from wordforge.config import (
 
 
 def test_default_toml_ships_inside_package():
-    ref = resources.files("wordforge.configs") / "default.toml"
-    assert ref.is_file(), "wordforge/configs/default.toml missing in the installed package"
+    ref = resources.files("wordforge.resources") / "default.toml"
+    assert ref.is_file(), "wordforge/resources/default.toml missing in the installed package"
 
 
 def test_default_toml_parses():
-    ref = resources.files("wordforge.configs") / "default.toml"
+    ref = resources.files("wordforge.resources") / "default.toml"
     data = tomllib.loads(ref.read_text(encoding="utf-8"))
     assert isinstance(data, dict)
     assert "stages" in data, "top-level 'stages' key required"

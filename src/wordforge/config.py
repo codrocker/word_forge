@@ -1,4 +1,4 @@
-"""Loader for wordforge stage pipeline config (configs/default.toml).
+"""Loader for wordforge stage pipeline config (resources/default.toml).
 
 Frozen dataclasses + hand validation; no pydantic (1 user, 8 stages — a
 closed schema, no runtime validation magic needed).
@@ -7,7 +7,7 @@ Spec §6 — `parser_version` lives here, is fingerprint input. Bumping it
 invalidates that stage's fingerprint and forces rerun (cache still hits).
 
 Round 1 D1 battle: config file lives INSIDE the package at
-src/wordforge/configs/default.toml. hatchling's `packages = ["src/wordforge"]`
+src/wordforge/resources/default.toml. hatchling's `packages = ["src/wordforge"]`
 ships it inside the wheel, so `uv tool install wordforge` works just as well
 as a git checkout. We resolve it with `importlib.resources` — stdlib API for
 package data — so the code path is identical dev vs installed.
@@ -44,7 +44,7 @@ class WordforgeConfig:
 
 
 def _load_default_bytes() -> bytes:
-    ref = resources.files("wordforge.configs") / "default.toml"
+    ref = resources.files("wordforge.resources") / "default.toml"
     return ref.read_bytes()
 
 
