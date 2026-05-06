@@ -1,7 +1,7 @@
 # wordforge web admin — design spec
 
 > Date: 2026-05-06
-> Status: draft, brainstormed, awaiting tri-review
+> Status: draft v2 (Round 1 tri-review 修订后,进入 Round 2)
 > Owner: allen
 
 ## 背景
@@ -98,11 +98,20 @@ Artifacts: `.omc/artifacts/ask/codex-*.md`、`.omc/artifacts/ask/gemini-*.md`。
 ### 2.1 修改 `domain.words` — 加两列
 
 ```sql
+-- v2: DEFAULT 0 + 对已导出过的历史行 backfill 为 1(已上线)
+-- 理由:75k 现有词绝大多数已经通过 quality_gate 导出到 serving/OSS/MySQL,
+--       语义上是"已上线",若全部 DEFAULT 0 会让 web admin 的"待审"队列瞬间
+--       堆满 75k 行,编辑体验崩溃;且与下游 MySQL 线上 status=1 不一致。
 ALTER TABLE domain.words
   ADD COLUMN status SMALLINT NOT NULL DEFAULT 0
     CHECK (status IN (0, 1, 2)),
   ADD COLUMN quality_flag TEXT NOT NULL DEFAULT 'none'
     CHECK (quality_flag IN ('none','suspect','fixed'));
+
+-- backfill:已进入 serving.word_payload(即已上线到下游)的词设为 1,其余留 0
+UPDATE domain.words
+   SET status = 1
+ WHERE word_id IN (SELECT word_id FROM serving.word_payload);
 
 CREATE INDEX idx_domain_words_status ON domain.words (status);
 CREATE INDEX idx_domain_words_quality ON domain.words (quality_flag)
@@ -110,6 +119,8 @@ CREATE INDEX idx_domain_words_quality ON domain.words (quality_flag)
 ```
 
 **`status SMALLINT`**:对齐上游 MySQL `word.word.status` 语义 `0=等待审核 / 1=已上线 / 2=已删除`(飞书 wiki 事实源定义)。MVP **不约束流转方向**,任意切换。将来加权限分层时再限制 1→2 需 admin。
+
+**backfill 策略**(新增 v2):migration 0011 在 ADD COLUMN 后立即 UPDATE 回填——已在 `serving.word_payload` 的词视为"已上线"(status=1),其余为 0。这和 MySQL 线上现状一致(mirror 脚本目前硬编码 status=1 也是基于这些词已上线的假设)。migration 与 backfill 是同一个 alembic upgrade 里的两步,人工跑。
 
 **`quality_flag TEXT`**:质量标注列,`none/suspect/fixed` 三态。来源不区分(LLM reviewer 或人工都写同一列,来源从 `meta.edit_audit` 查回)。部分索引只覆盖非 none 的少数行,成本低。
 
@@ -179,7 +190,10 @@ CREATE INDEX idx_edit_audit_editor ON meta.edit_audit (editor_id, created_at DES
 ### 2.6 alembic 迁移
 
 - 迁移文件 `0011_add_editor_workflow.py`,续接现有命名
-- 一次 migration 包含:`domain.words` 扩列 + 新 `meta` schema + 三张表 + 索引
+- 一次 migration 包含:
+  1. `domain.words` 扩列(status / quality_flag)
+  2. **backfill**:已在 `serving.word_payload` 的词 status=1,其余留 0(§2.1)
+  3. 新 `meta` schema + 三张表 + 索引
 - **web 容器启动不碰 alembic**,部署前人工跑 `alembic upgrade head`(见 §6)
 
 ---
@@ -236,7 +250,7 @@ GET /api/v1/words
     quality    ?  none|suspect|fixed 过滤
     type       ?  1|2 过滤
     pos        ?  1-10|201 过滤
-    order      ?  updated_at_desc(默认) | lemma_asc
+    order      ?  updated_at_desc (MVP 唯一)  -- lemma_asc 后续迭代
     cursor     ?  keyset 游标(见下)
     limit      ?  默认 50,最大 200
   resp  {ok, data: {items: [...], next_cursor}}
@@ -249,11 +263,19 @@ GET /api/v1/words
  "meaning_count": 3}
 ```
 
-**分页**:keyset 游标 = `(updated_at, word_id)`,base64(JSON) 编码:
+**分页**(v2 简化):keyset 游标 = `(updated_at, word_id)`,**纯 base64(JSON),不签名**。
+
 ```
-cursor = base64(json({updated_at: "...", word_id: 12345}))
+cursor = base64(json({o: "updated_at_desc", u: "2026-05-06T10:30:00Z", w: 12345}))
 ```
-后端用 `WORDFORGE_WEB_SECRET_KEY` 做 HMAC 签名挂在 JSON 尾,防篡改。MVP 校验签名但不强制 TTL。
+
+**为什么不签名**(Round 1 砍):3 人内网场景下,篡改游标无越权利得——所有登录 editor 都有满权,游标只决定翻页位置。HMAC 签名引入了 `WORDFORGE_WEB_SECRET_KEY` 这个新 secret + 新 env 文件 + 轮换问题,同时会违反 CLAUDE.md "不自建新凭证文件" 硬规矩。**砍**。
+
+**cursor 内含 order 字段**(Round 1 修):cursor 必须记录当前 order 模式(`updated_at_desc` / `lemma_asc`),因为不同 order 需要不同的 keyset 起点(`lemma_asc` 下是 `(form, word_id)`,不是 `updated_at`)。用 mismatched cursor 请求视为 400 `invalid_input`。
+
+**MVP order 锁定**(Round 1 简化):MVP 只实现 `updated_at_desc` 一种。`lemma_asc` 留到后续迭代。cursor schema 已预留 order 字段,将来扩展零摩擦。
+
+**decode 失败**:返 400 `invalid_input`,不静默跳到第一页(避免结果诡异)。
 
 **搜索 scope**:MVP 只对 `form` 做 ILIKE,不对释义/例句全文搜。75k 词规模下 ILIKE 扫得动,痛了再加 pg_trgm 索引。
 
@@ -303,23 +325,35 @@ PATCH /api/v1/words/{word_id}
 
 1. **显式 ID 寻址**:`field_path` 只声明"改哪张表哪个列",具体哪行由 `target_id` 指定(meaning_id/mnemonic_id/sentence_id)。不用 `meanings[3]` 数组索引——索引会因并发 insert/delete 错位
 2. **drift 策略:严格 rollback**:任一条 change 的 `old_value` 与 DB 当前值不符,整个事务 rollback 返 409,前端必须刷新重来。与 reviewer 批量跑"部分成功"策略不同——人的心理模型是"我看到的版本就是要改的版本",部分成功会让编辑误以为保存了
-3. **复用 reviewer.patch 模块**:call `wordforge.reviewer.patch.apply_patches_for_word` 或其 service 层等价物;捕 `PatchDriftError` 转 409
+3. **复用 reviewer.patch 的 low-level primitives,不复用整函数**(Round 1 修):
+   - `wordforge.reviewer.patch.apply_patches_for_word` 是 **skip-on-drift** 语义(机器批跑部分成功可接受);web 场景要的是 **all-or-nothing**(人心理模型要求"看到的版本就是要改的版本")
+   - 两者语义不兼容,**不能直接复用整函数**
+   - 正确做法:web service 层新建 `wordforge.web.services.word_service.apply_web_changes(conn, word_id, changes)`,内部调用 `reviewer.patch.check_drift()` + `reviewer.patch.apply_patch()` 两个低层原语;**第一个 drift 处立即 raise `PatchDriftError`**,由外层 `engine.begin()` 上下文自动回滚整事务
+   - `PatchDriftError` 冒到全局 exception handler → 409 `conflict`,response body 含 drift 列表(哪些 changes 与 DB 不符)
 4. **原子审计写入**:每条成功 change 在同事务内写一条 `meta.edit_audit`;任一方失败全回滚
-5. **updated_at 规矩**(对齐 CLAUDE.md "数据模型地雷"):改 `domain.words` 时带 `updated_at = now()`;改 `meanings/mnemonics/sentences` 三张无 updated_at 列,不写
+5. **serving.word_payload 同事务 rebuild**(Round 1 新增,P1 fix):
+   - wordforge 现有 export stage 在改动 `domain.*` 后**同事务**调用 `_upsert_serving_word_payload(conn, word_id)` 重建下游读模型;web PATCH 若跳过,编辑结果不会进 `serving.word_payload`,下游 words_core 读到的是 stale 数据
+   - 实施:把 `wordforge.stages.export.ExportStage._upsert_serving_word_payload` 提取为公共函数 `wordforge.db.serving.rebuild_word_payload(conn, word_id)`,export + web service 共用
+   - web service 在 PATCH 事务末尾、POST 成功新建后、status/quality 切换后都调用一次
+6. **updated_at 规矩**(对齐 CLAUDE.md "数据模型地雷"):改 `domain.words` 时带 `updated_at = now()`;改 `meanings/mnemonics/sentences` 三张无 updated_at 列,不写
 
 ### 3.5 状态切换
 
 ```
 POST /api/v1/words/{word_id}/status
-  body  {status: 0|1|2}
+  body  {old_value: 0|1|2, new_value: 0|1|2}
   resp  200 OK data: null
+  err   409 conflict data: {db_value, expected_old_value}  -- drift
 
 POST /api/v1/words/{word_id}/quality
-  body  {quality_flag: "none"|"suspect"|"fixed"}
+  body  {old_value: "none"|"suspect"|"fixed", new_value: "none"|"suspect"|"fixed"}
   resp  200 OK data: null
+  err   409 conflict data: {db_value, expected_old_value}  -- drift
 ```
 
-独立 endpoint 原因:语义是"工作流动作"而非"字段编辑",audit 单独记 `field_path='words.status'` / `'words.quality_flag'`。**service 层复用 PATCH 同一套 audit 写入逻辑**,不手写独立的 audit 路径。
+**v2 加 old_value drift 校验**(Round 1 修,P1):对齐 CLAUDE.md 硬规矩 #2 "写入前必须校验 old_value"。前端在 GET 详情时拿到当前 `status/quality_flag`,改动时把原值作为 `old_value` 回传,service 层比对 DB 当前值——不匹配 raise `PatchDriftError` → 409,和 PATCH 同构。不能只发 `{status: 1}` 黑盒覆盖,会造成并发编辑时后者静默覆盖前者。
+
+**独立 endpoint 原因**:语义是"工作流动作"而非"字段编辑",audit 单独记 `field_path='words.status'` / `'words.quality_flag'`,`op='update'`,`old_value`/`new_value` 填真实值。**service 层**与 PATCH 共用同一套 `apply_web_changes` + audit 写入 + serving rebuild 路径,不手写独立 audit。
 
 **`suspect → fixed` 由编辑手动点按钮触发**,不在 PATCH 里自动转换。
 
@@ -344,10 +378,12 @@ POST /api/v1/words
 
 - `form` 规范化:`strip()` 去两端空白,**不 lowercase**(phrase 大小写有意义)
 - 新建词 `source = 'human:web'`(符合 domain.words CHECK 约束)
+- **子表 source 服务端强制 stamp**(Round 1 修,P1):`meanings / mnemonics / sentences / phrases` 每张子表都有 `source` NOT NULL + CHECK(`pipeline:% | human:% | import:%`)。新建走 web 路径时,**所有子行**的 `source` 都由 service 层强制填 `'human:web'`,**忽略**前端 body 里任何 `source` 字段(即使前端塞了也不用)。避免前端误传 `'pipeline:xxx'` 污染来源追溯 + 避免 CHECK 约束失败
 - status 默认 `0`(等待审核),quality_flag 默认 `'none'`
 - **form+type 冲突降级为编辑**:先查存在性,存在 → 409 + 返 `word_id`,前端路由到 `/words/{id}` 编辑页
 - 并发 UNIQUE 碰撞:service 捕 `IntegrityError` → 查已存在的 word_id → 走同一个 409 响应路径
 - audit:创建走 `op='insert'`,每张表每行一条
+- **同事务 rebuild serving.word_payload**(Round 1 新增):POST 成功后调 `rebuild_word_payload(conn, new_word_id)`
 
 ### 3.7 审计日志
 
@@ -378,18 +414,25 @@ MVP 只做查询,不做"点一条 audit 就回滚"。audit 数据结构足够将
 **密码存储**:
 - `argon2-cffi`(passlib 默认后端),默认参数 `time_cost=3, memory_cost=64*1024, parallelism=4`
 - 永不记录明文密码(日志/审计/内部表均不存)
+- **argon2 verify/hash ~100ms CPU 阻塞**(Round 1 修,P1):web 的路由处理函数**统一声明为 sync `def`**(不是 `async def`),由 FastAPI/Starlette 自动调度到 threadpool。这与 wordforge 现有 sync `Engine` 匹配,避免 async-sync 混用 + 天然让 argon2/DB I/O 不阻塞 event loop
+- 不在 sync 路由里套 `asyncio.to_thread`(冗余);在 async 路由里必须 `await asyncio.to_thread(ph.verify, ...)`(本 MVP 不走此路径)
 
 **session token**:
 - 签发:`raw = secrets.token_urlsafe(32)` → `token_hash = sha256(raw)` 存 DB → `raw` 塞 cookie
 - 校验:cookie 拿 raw → sha256 → 查 `meta.editor_sessions WHERE token_hash = ? AND expires_at > now()`
 - 登出:`DELETE FROM meta.editor_sessions WHERE token_hash = sha256(cookie)`
 
-**cookie 规约**:
+**cookie 规约**(v2 明确):
 ```
-Set-Cookie: session=<raw_token>; HttpOnly; SameSite=Strict; Path=/api; Max-Age=604800; Secure (prod only)
+Set-Cookie: session=<raw_token>; HttpOnly; SameSite=Strict; Path=/api; Max-Age=604800; [Secure]
 ```
 - `Max-Age = 7 * 24 * 3600`(7 天),同步 `expires_at`
-- dev 不设 `Secure`(http://localhost:8000 才能带)
+- `Secure` **不无脑开**(Round 1 修,P1):由 env `WORDFORGE_WEB_COOKIE_SECURE` 控制
+  - MVP 部署模式是"本机 docker + 内网 HTTP / SSH tunnel 到 localhost",**HTTP 场景 browser 会拒收 Secure cookie** → 登录直接失效
+  - 默认 `WORDFORGE_WEB_COOKIE_SECURE=false`(适配内网 HTTP)
+  - 未来云部署加 TLS 时改 `=true`
+  - **部署文档必须显式说明这个 env 的选择规则**
+  - 这个 env 不是 secret(bool),可以放 docker-compose `environment` 块,不污染 `~/.wordforge/` 凭证体系
 
 **登录保护**:slowapi `@limiter.limit("10/60seconds")` 按 IP,超限 429。
 
@@ -446,12 +489,18 @@ wordforge editors deactivate --email xxx
 - prod:同源,不需要 CORS
 - dev:FastAPI 开 CORS middleware 白名单 `http://localhost:5173`(仅 dev)
 
-### 4.5 连接池
+### 4.5 连接池 + Engine 类型锁定
 
-复用 `wordforge.db.engine`(同 engine factory 代码,不复制)。
-- pipeline:长任务,池大 ~20
-- web:请求短,池 `pool_size=5, max_overflow=5`
-- 两进程连同一 RDS,serverless 最大连接数足够
+**Engine 构造**(Round 1 修,P1):
+- web 进程**独立**调用 `wordforge.db.engine.make_engine(url, pool_size=5, max_overflow=5)` 创建自己的 `Engine` 实例(不共享 pipeline 的)
+- **只用 sync `Engine`**,**不引入 `AsyncEngine` / `create_async_engine`**,对齐 CLAUDE.md sync 路径 + 已有 `reviewer.patch` 等模块同构
+- 所有 route handler 声明为 sync `def`,FastAPI 自动调度到 threadpool(见 §4.1)
+- 所有 service 方法 sync,直接 `with engine.begin() as conn:`,不包 `asyncio.to_thread`
+
+**连接池规模**:
+- pipeline 进程:长任务,池大 ~20
+- web 进程:请求短,池 `pool_size=5, max_overflow=5`
+- 两进程独立 pool 连同一 RDS;serverless 最大连接数足够,无冲突
 
 ### 4.6 pytest env 污染规矩
 
@@ -473,23 +522,30 @@ wordforge editors deactivate --email xxx
 **集成测试(`tests/web/integration/`)—— 主战场**:
 用 FastAPI `TestClient` + 真 PG(test db 5434,`tests/conftest.py` guard 必须通过)。
 
-**必须覆盖的场景**:
+**必须覆盖的场景**(v2 扩充):
 ```
 [] 登录 → cookie 带入 → 访问 /me → 登出 → cookie 失效
 [] 搜词:lemma 子串 / status 过滤 / 分页 keyset + next_cursor 往返
 [] 详情页聚合正确(word + meanings + mnemonics + sentences + phrases)
 [] PATCH 成功路径,applied 数量正确
 [] PATCH drift:故意让 old_value 不匹配 → 409 + 整事务 rollback + audit 无记录
-[] PATCH 原子性-A:模拟 domain UPDATE 抛错 → 事务回滚 → audit 无记录
-[] PATCH 原子性-B:模拟 audit INSERT 抛错 → 事务回滚 → domain 未改
-[] POST /words 新建成功 → 201 + audit 有 insert 记录
+[] PATCH 原子性-A:模拟 domain UPDATE 抛错 → 事务回滚 → audit 无记录 + serving 未改
+[] PATCH 原子性-B:模拟 audit INSERT 抛错 → 事务回滚 → domain 未改 + serving 未改
+[] PATCH 原子性-C(v2 新):模拟 serving rebuild 抛错 → 事务回滚 → domain 未改 + audit 未写
+[] PATCH 成功后 serving.word_payload 内容与 domain 最新值一致(v2 新)
+[] POST /words 新建成功 → 201 + audit 有 insert 记录(每张子表一条)+ serving rebuild 完成
+[] POST /words 新建:body 中子表 source='pipeline:xxx' 被服务端覆盖为 'human:web'(v2 新)
 [] POST /words form+type 重复 → 409 + 返已存在 word_id
 [] POST /words 并发 UNIQUE 碰撞 → 第二个请求走 409 同一路径
-[] POST /status 和 POST /quality 写入正确 audit(field_path 对)
+[] POST /status drift:old_value 与 DB 不符 → 409 + 无副作用(v2 新)
+[] POST /quality drift:同上(v2 新)
+[] POST /status 成功后 audit 记录 field_path='words.status',old/new 值正确
 [] 审计日志按 word_id / editor_id / 时间过滤
 [] 未登录访问受保护 endpoint → 401
 [] Rate limit:11 次错密码后第 11 次 → 429
 [] domain.meanings/mnemonics/sentences 改动 SQL 不含 updated_at
+[] cursor 传入错误 order(与当前 query order 不符)→ 400 invalid_input(v2 新)
+[] cursor base64 解码失败 → 400 invalid_input(v2 新)
 ```
 
 **不做 e2e**(Playwright/Cypress)。MVP 手测 checklist 兜底。
@@ -554,12 +610,20 @@ npm run dev     # Vite :5173,proxy /api → :8000
 cd word_forge/frontend && npm run build
 cd ..
 # 先人工跑 migrate(容器不碰 alembic)
+# v2:必须显式 source prod.env,不能依赖 shell 现有环境
+set -a
+source ~/.wordforge/prod.env
+set +a
+# 校验 target(避免误跑 test 或错的 DB)
+echo "migrate target: $DATABASE_URL" | grep -E 'wordforge[^_]' || { echo "WRONG DB"; exit 1; }
 uv run alembic upgrade head
 # 起 web
 docker compose up -d wordforge-web
 ```
 
 FastAPI 启动时静态挂 `frontend/dist/`,SPA 路由走 catch-all `index.html`。
+
+**挂载顺序**(Round 1 修):`app.include_router(api_router, prefix='/api/v1')` 先注册,最后 `app.mount('/', StaticFiles(directory='frontend/dist', html=True))` 兜底。`/api/*` 不匹配的路径由 API exception handler 返 JSON 404,不落入 SPA catch-all。
 
 **部署范围限定**:MVP 仅覆盖"本机 docker + 内网/VPN/SSH 隧道访问"。云部署(远端服务器凭证分发、Nginx/TLS)TBD,不在 MVP 内。
 
@@ -572,23 +636,38 @@ wordforge-web:
   build:
     context: .
     dockerfile: Dockerfile.web
-  env_file:
-    - ~/.wordforge/prod.env
-    - ~/.wordforge/web.env       # 新加
+  environment:
+    # v2:最小权限原则 — 只 pass 必要变量,不挂整份 prod.env
+    # 这避免 web 容器拿到 AWS_* / OPENAI_API_KEY 等 LLM 凭证
+    # 宿主先 source ~/.wordforge/prod.env 再 up,下面的 ${VAR} 从宿主 env 注入
+    DATABASE_URL: "${DATABASE_URL}"
+    WORDFORGE_WEB_COOKIE_SECURE: "false"   # 内网 HTTP 模式;TLS 部署时改 true
   ports:
     - "8000:8000"
-  depends_on:
-    - wordforge-pg
   restart: unless-stopped
+  # 不加 depends_on: wordforge-pg — DB 是 RDS(外部),不是 docker-compose 里的 pg 容器
 ```
 
-### 6.4 `~/.wordforge/web.env`(新增凭证文件)
+**v2 凭证最小化**(Round 1 修,P2 #9):
+- 不用 `env_file: ~/.wordforge/prod.env`(两重风险:一是 `~` 在 docker-compose YAML 里展开不稳定;二是把 AWS/LLM 凭证全透给 web 容器违反最小权限)
+- 改用 `environment:` 块 + 宿主 shell 的 `${VAR}` 插值——宿主 `source ~/.wordforge/prod.env` 后 `docker compose up`,只把 allowlist 里的变量注入容器
+- 对齐 CLAUDE.md "不自建新凭证文件" 硬规矩——MVP 零新增凭证文件(原计划的 `web.env` 已砍)
 
-按 CLAUDE.md 凭证规矩,新增文件不污染已有:
+**docker-compose 启动流程**:
+```bash
+set -a; source ~/.wordforge/prod.env; set +a
+docker compose up -d wordforge-web
 ```
-WORDFORGE_WEB_SECRET_KEY=<openssl rand -hex 32>   # cursor HMAC + 未来扩展
-```
-chmod 600。同步更新 `word_forge/CLAUDE.md` 凭证表。
+
+### 6.4 凭证策略(v2 零新增文件)
+
+**Round 1 砍**:原计划的 `~/.wordforge/web.env` + `WORDFORGE_WEB_SECRET_KEY` 已整体砍掉(cursor HMAC 过度 + 违反"不自建新凭证文件"硬规矩)。
+
+MVP web 进程只需:
+- `DATABASE_URL`(已在 `~/.wordforge/prod.env`,宿主 `source` 后 docker-compose 注入)
+- `WORDFORGE_WEB_COOKIE_SECURE`(bool,非 secret,直接写 docker-compose `environment` 块)
+
+**对齐 CLAUDE.md 硬规矩**:web MVP 零新增凭证文件、零新增 env 扩展到 `~/.wordforge/`。未来加 secret(JWT signing / CSRF double-submit)时再补。
 
 ### 6.5 Dockerfile.web(独立,不复用 pipeline 的)
 
@@ -596,6 +675,19 @@ chmod 600。同步更新 `word_forge/CLAUDE.md` 凭证表。
 - Stage 1:`node:22-alpine` build 前端,产出 `dist/`
 - Stage 2:`python:3.12-slim` `uv sync --extra web`(新加 extra)
 - Stage 3:copy stage1 `dist/` + stage2 `.venv/`,ENTRYPOINT `wordforge web --host 0.0.0.0 --port 8000`
+
+**`pyproject.toml [web]` extra 必须定义**(Round 1 修,P2):
+```toml
+[project.optional-dependencies]
+web = [
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.29",
+    "argon2-cffi>=23.1",
+    "slowapi>=0.1.9",
+    "python-multipart>=0.0.7",   # form parsing for login
+]
+```
+与现有 `dev` / `llm` extra 并列。`uv sync --extra web --extra dev` 可本地联调。
 
 ### 6.6 CLI 子命令
 
@@ -654,9 +746,11 @@ session cleanup 兜底(opportunistic):login endpoint 内顺手删除过期 sessi
 | 文件 | 更新内容 | 触发 |
 |---|---|---|
 | `docs/shared/cross-repo-map.md` | 新增 `wordforge-web` 作为 wordforge 子服务,端口 8000,定位"内部工具,非公开" | M1 落地 |
-| `docs/shared/data-flow.md` | `domain.words` 新增 `status` + `quality_flag` 两列 + 语义(status 对齐上游 MySQL 三态码) | M1 migration 落地 |
-| `word_forge/CLAUDE.md` | 新增 "Web admin" 小节(启动命令/凭证路径/`editors` CLI);凭证表加 `~/.wordforge/web.env` | M1/M2 落地 |
+| `docs/shared/data-flow.md` | (1) `domain.words` 新增 `status` + `quality_flag` 两列 + 语义(status 对齐上游 MySQL 三态码) (2) 顺便把全文残留的 `app.*` 引用更新为 `domain.*`(migration 0007 改名已过 4 天还没同步,趁此一次修完 — Round 1 修 P3) | M1 migration 落地 |
+| `word_forge/CLAUDE.md` | 新增 "Web admin" 小节(启动命令 / sync-only Engine 架构界线 / `editors` CLI / web cookie Secure 环境开关) | M1/M2 落地 |
 | `word_forge/README.md` | "本地 Postgres 的定位"后加一小节 "Web Admin" | M7 发布 |
+| **`scripts/replicate/field_mapping.py`**(Round 1 新增 P1) | `row_to_mysql_word()` 改读 PG `domain.words.status` 列(目前硬编码 `"status": 1`)。Migration 0011 落地后,mirror 脚本若不同步改,会把所有词都强制写 MySQL status=1,丢掉 web admin 改动 | M1 migration 落地,与 migration 同 PR |
+| **`scripts/replicate/mirror_to_mysql.py`**(Round 1 新增 P1) | 同上:调用点改用新字段 | 同上 |
 | 飞书 wiki | **不更新** — wiki 只管 MySQL 上游事实源,PG domain.* 不进 wiki |
 
 ### 7.4 MVP 刻意不做清单
@@ -676,6 +770,9 @@ session cleanup 兜底(opportunistic):login endpoint 内顺手删除过期 sessi
 - Playwright/Cypress e2e
 - 多实例水平扩展
 - 云部署凭证分发
+- **cursor HMAC 签名**(Round 1 砍):3 人内网无攻击面收益;未来公网暴露再加
+- **`lemma_asc` order**(Round 1 收紧):MVP 只实现 `updated_at_desc`;cursor schema 预留 order 字段,未来扩展无摩擦
+- **Async Engine / async def 路由**(Round 1 锁定):sync-only 路径,对齐 sqlalchemy 2.0 sync Engine
 
 ### 7.5 决策源摘要
 
@@ -685,7 +782,35 @@ session cleanup 兜底(opportunistic):login endpoint 内顺手删除过期 sessi
 
 ---
 
-## 附录 A — 目录树预览
+## 附录 A — Round 1 Tri-Review 决策映射(v1 → v2)
+
+Round 1 发现,三方独立 review 后的修订清单(每条带源方和文档落点):
+
+| # | Severity | 来源 | 问题摘要 | 修订落点 |
+|---|---|---|---|---|
+| F1 | P1 | architect | `apply_patches_for_word` skip-on-drift 与 web all-or-nothing 语义不兼容 | §3.4 point 3 改为"复用 low-level primitives" |
+| F2 | P1 | architect | web PATCH 未同步 `serving.word_payload` → 下游 stale | §3.4 point 5 新增;§3.6 POST 同;测试清单 3 条 |
+| F3 | P1 | architect | `mirror_to_mysql.py` hardcode `status=1` | §7.3 新增两行 |
+| C1 | P1 | architect + codex + gemini | cursor HMAC 过度 + `web.env` 违反凭证硬规矩 | §3.2 砍 HMAC;§6.4 完全重写;§7.4 加入不做清单 |
+| C2 | P1 | architect + codex + gemini | argon2 阻塞 event loop,async/sync 策略不明 | §4.1 补 sync def 选择;§4.5 锁死 sync Engine |
+| C3 | P1 | architect + codex | status/quality endpoint 缺 old_value drift | §3.5 body 加 `old_value/new_value` + drift 409 |
+| C4 | P2 | architect + codex | status DEFAULT 0 对 75k 现行无 backfill | §2.1 加 `UPDATE ... WHERE word_id IN serving.word_payload`;§2.6 明示 |
+| C5 | P1 | architect + gemini | Sync Engine + FastAPI 路由签名未锁 | §4.5 重写 "Engine 类型锁定" |
+| U4 | P1 | codex | `Secure` cookie 在 HTTP 内网部署失效 | §4.1 cookie 规约加 `WORDFORGE_WEB_COOKIE_SECURE` env |
+| U5 | P1 | codex | POST /words 子表 source 未 stamp | §3.6 service 强制填 `human:web` 覆盖前端 |
+| U6 | P2 | codex | cursor 对 lemma_asc 不兼容 | §3.2 MVP 锁 updated_at_desc;cursor 内含 order |
+| U7 | P2 | codex | migration 命令未 source env | §6.2 加 `set -a; source; set +a` + 校验 |
+| U8 | P2 | codex | docker-compose `~` 展开 + `depends_on: wordforge-pg` 矛盾 RDS | §6.3 重写 compose,改用 `${HOME}`/environment 插值 + 删 depends_on |
+| U9 | P2 | codex | web 容器挂载整份 prod.env 含 AWS/LLM 凭证 | §6.3 改 `environment:` allowlist,只传 DATABASE_URL |
+| U10 | P2 | architect | `pyproject.toml` [web] extra 未定义 | §6.5 新增完整 extra 定义 |
+| U12 | P3 | architect | `data-flow.md` 仍用 `app.*` | §7.3 顺便修 |
+| U14 | P3 | architect | SPA catch-all 吞 API 404 | §6.2 明示挂载顺序 |
+| U11 | N/A | architect | spec port 5434 是旧值 | **证伪**:CLAUDE.md 已改为 5434,spec 对 |
+| U13 | P3 | architect | login session cleanup concurrent DELETE | **不改**:3 人规模无害 |
+
+v1 → v2 合计修订 17 处。全部修订后进 Round 2 fresh review 验证。
+
+## 附录 B — 目录树预览
 
 ```
 word_forge/
