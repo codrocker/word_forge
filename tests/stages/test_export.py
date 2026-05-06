@@ -363,6 +363,85 @@ def test_export_concurrent_modification_error(at_head):
         stage._upsert_app_words(conn, row_w)
 
 
+def test_reupsert_preserves_admin_status(at_head):
+    """M1.5: ON CONFLICT must NOT overwrite admin-edited status.
+
+    Pipeline INSERT hardcodes status=1. If an admin later sets status=2,
+    a pipeline re-run (Case B UPSERT) must preserve status=2 while still
+    updating other columns (phonetic, source, etc.).
+    """
+    engine = make_engine()
+    stage, artifacts = _make_stage(engine)
+    wid = _seed_word(engine, form="resilient", batch_id="B_EX_STATUS")
+    _seed_all_upstreams(artifacts, wid)
+
+    # Override form in pipeline.words so it matches our test word
+    with engine.begin() as conn:
+        conn.execute(
+            sa.text("UPDATE pipeline.words SET normalized_form = 'resilient' WHERE id = :w"),
+            {"w": wid},
+        )
+
+    # Step 1: Initial pipeline INSERT via _upsert_app_words (Case A)
+    row_w = {
+        "type": 1,
+        "form": "resilient",
+        "phonetic_us": "/rɪˈzɪl.i.ənt/",
+        "phonetic_uk": "/rɪˈzɪl.i.ənt/",
+        "audio_us": None,
+        "audio_uk": None,
+        "structure": None,
+        "plural": None,
+        "past_tense": None,
+        "past_participle": None,
+        "third_person": None,
+        "present_participle": None,
+        "comparative": None,
+        "superlative": None,
+        "derivatives": None,
+        "source": "pipeline:anthropic:claude-opus-4:paraphrase_v1",
+    }
+    with engine.begin() as conn:
+        word_id = stage._upsert_app_words(conn, row_w)
+
+    # Verify initial status == 1
+    with engine.begin() as conn:
+        status = conn.execute(
+            sa.text("SELECT status FROM domain.words WHERE word_id = :w"),
+            {"w": word_id},
+        ).scalar_one()
+    assert status == 1
+
+    # Step 2: Admin changes status to 2
+    with engine.begin() as conn:
+        conn.execute(
+            sa.text("UPDATE domain.words SET status = 2 WHERE word_id = :w"),
+            {"w": word_id},
+        )
+
+    # Step 3: Pipeline re-runs UPSERT with updated fields
+    row_w_v2 = {
+        **row_w,
+        "phonetic_us": "/rɪˈzɪl.jənt/",
+        "source": "pipeline:anthropic:claude-opus-4:paraphrase_v2",
+    }
+    with engine.begin() as conn:
+        returned_id = stage._upsert_app_words(conn, row_w_v2)
+    assert returned_id == word_id  # same row updated
+
+    # Step 4: Assert status preserved, other fields updated
+    with engine.begin() as conn:
+        row = conn.execute(
+            sa.text(
+                "SELECT status, phonetic_us, source FROM domain.words WHERE word_id = :w"
+            ),
+            {"w": word_id},
+        ).one()
+    assert row[0] == 2, "admin status must survive pipeline re-upsert"
+    assert row[1] == "/rɪˈzɪl.jənt/", "phonetic_us should be updated"
+    assert row[2] == "pipeline:anthropic:claude-opus-4:paraphrase_v2", "source should be updated"
+
+
 from wordforge.stages.export import _POS_MAP
 
 
