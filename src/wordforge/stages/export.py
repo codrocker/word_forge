@@ -218,12 +218,14 @@ class ExportStage:
             INSERT INTO domain.words (
               type, form, phonetic_us, phonetic_uk, audio_us, audio_uk,
               structure, plural, past_tense, past_participle, third_person,
-              present_participle, comparative, superlative, derivatives, source
+              present_participle, comparative, superlative, derivatives, source,
+              status
             ) VALUES (
               :type, :form, :phonetic_us, :phonetic_uk, :audio_us, :audio_uk,
               CAST(:structure AS jsonb), :plural, :past_tense, :past_participle,
               :third_person, :present_participle, :comparative, :superlative,
-              CAST(:derivatives AS jsonb), :source
+              CAST(:derivatives AS jsonb), :source,
+              1
             )
             ON CONFLICT (form, type) DO UPDATE SET
               phonetic_us = EXCLUDED.phonetic_us,
