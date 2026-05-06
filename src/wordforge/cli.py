@@ -460,5 +460,25 @@ def review_cmd(
         _sys.exit(rc)
 
 
+@app.command("web")
+def web_cmd(
+    host: str = typer.Option("0.0.0.0", "--host", help="Bind address."),
+    port: int = typer.Option(8000, "--port", help="Bind port."),
+    reload: bool = typer.Option(False, "--reload", help="Enable auto-reload (dev only)."),
+    workers: int = typer.Option(1, "--workers", help="Number of uvicorn workers."),
+) -> None:
+    """Start the web admin server."""
+    import uvicorn
+
+    uvicorn.run(
+        "wordforge.web.app:create_app",
+        host=host,
+        port=port,
+        reload=reload,
+        workers=workers,
+        factory=True,
+    )
+
+
 if __name__ == "__main__":
     app()
