@@ -34,6 +34,7 @@ web = [
   "argon2-cffi>=23.1",
   "slowapi>=0.1.9",
   "python-multipart>=0.0.7",
+  "pydantic[email]>=2.0",
 ]
 
 [project.scripts]
