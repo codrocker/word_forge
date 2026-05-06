@@ -53,6 +53,13 @@ def register_exception_handlers(app: FastAPI) -> None:
             content=envelope_err(code_map.get(exc.status_code, "http_error"), exc.detail or ""),
         )
 
+    @app.exception_handler(ValueError)
+    async def _value_error(request: Request, exc: ValueError):
+        return JSONResponse(
+            status_code=400,
+            content=envelope_err("invalid_input", str(exc)),
+        )
+
     @app.exception_handler(Exception)
     async def _uncaught(request: Request, exc: Exception):
         req_id = getattr(request.state, "request_id", "unknown")
