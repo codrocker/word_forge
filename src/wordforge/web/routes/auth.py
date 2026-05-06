@@ -7,7 +7,7 @@ from slowapi.util import get_remote_address
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
-from wordforge.web.auth import verify_password
+from wordforge.web.auth import get_dummy_hash, verify_password
 from wordforge.web.deps import current_editor, get_engine
 from wordforge.web.errors import envelope_ok
 from wordforge.web.schemas.auth import EditorOut, LoginRequest
@@ -32,8 +32,11 @@ def login(
     response: Response,
     engine: Engine = Depends(get_engine),
 ):
+    # Best-effort cleanup outside login txn to avoid lock contention.
+    with engine.begin() as cleanup_conn:
+        cleanup_expired(cleanup_conn)
+
     with engine.begin() as conn:
-        cleanup_expired(conn)
         row = conn.execute(
             text(
                 "SELECT id, email, display_name, password_hash, is_active "
@@ -41,7 +44,13 @@ def login(
             ),
             {"e": body.email},
         ).first()
-        if row is None or not row.is_active or not verify_password(row.password_hash, body.password):
+
+        # Always run argon2 verify regardless of whether account exists,
+        # eliminating timing oracle that leaks email existence.
+        stored_hash = row.password_hash if row is not None else get_dummy_hash()
+        password_ok = verify_password(stored_hash, body.password)
+
+        if row is None or not row.is_active or not password_ok:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="invalid email or password",
