@@ -11,6 +11,8 @@ router = APIRouter(prefix="/api/v1")
 
 @router.get("/health")
 def health(engine: Engine = Depends(get_engine)):
-    with engine.connect() as conn:
+    # 3s statement timeout avoids health checks blocking worker pool on slow DB
+    with engine.begin() as conn:
+        conn.execute(text("SET LOCAL statement_timeout = '3s'"))
         conn.execute(text("SELECT 1"))
     return envelope_ok({"status": "ok"})

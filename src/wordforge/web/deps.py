@@ -12,3 +12,10 @@ from wordforge.db.engine import make_engine
 def get_engine() -> Engine:
     # spec §4.5: web pool_size=5, max_overflow=5
     return make_engine(pool_size=5, max_overflow=5)
+
+
+def dispose_engine() -> None:
+    """Dispose cached engine and clear cache (tests + lifespan shutdown)."""
+    if get_engine.cache_info().currsize > 0:
+        get_engine().dispose()
+    get_engine.cache_clear()
