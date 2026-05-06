@@ -51,7 +51,7 @@ def upgrade() -> None:
     )
 
     # --- 4. Create meta schema ---
-    op.execute("CREATE SCHEMA meta")
+    op.execute("CREATE SCHEMA IF NOT EXISTS meta")
 
     # --- 5. meta.editors ---
     op.execute(
@@ -83,12 +83,14 @@ def upgrade() -> None:
     op.execute(
         "CREATE TABLE meta.edit_audit ("
         "id BIGSERIAL PRIMARY KEY, "
+        "-- word_id intentionally has no FK: audit rows must survive word deletion\n"
         "word_id BIGINT NOT NULL, "
         "field_path TEXT NOT NULL, "
         "target_id BIGINT, "
         "op TEXT NOT NULL CHECK (op IN ('update', 'insert', 'delete')), "
         "old_value JSONB, "
         "new_value JSONB, "
+        "-- RESTRICT: cannot delete editor while audit rows reference them\n"
         "editor_id BIGINT NOT NULL REFERENCES meta.editors(id) ON DELETE RESTRICT, "
         "created_at TIMESTAMPTZ NOT NULL DEFAULT now()"
         ")"
@@ -106,7 +108,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     # Reverse order: drop meta schema (CASCADE drops all tables + indexes),
     # then drop domain.words indexes and columns.
-    op.execute("DROP SCHEMA meta CASCADE")
+    op.execute("DROP SCHEMA IF EXISTS meta CASCADE")
 
     op.execute("DROP INDEX IF EXISTS domain.idx_domain_words_quality")
     op.execute("DROP INDEX IF EXISTS domain.idx_domain_words_status")
