@@ -1,7 +1,7 @@
 # wordforge web admin — design spec
 
 > Date: 2026-05-06
-> Status: draft v2 (Round 1 tri-review 修订后,进入 Round 2)
+> Status: draft v3 (Round 2 tri-review 修订后,进入 Round 3)
 > Owner: allen
 
 ## 背景
@@ -113,7 +113,7 @@ UPDATE domain.words
    SET status = 1
  WHERE word_id IN (SELECT word_id FROM serving.word_payload);
 
-CREATE INDEX idx_domain_words_status ON domain.words (status);
+-- status 索引改成部分索引(见下"status 对下游的语义契约"末尾),这里不建全量索引
 CREATE INDEX idx_domain_words_quality ON domain.words (quality_flag)
   WHERE quality_flag <> 'none';
 ```
@@ -121,6 +121,31 @@ CREATE INDEX idx_domain_words_quality ON domain.words (quality_flag)
 **`status SMALLINT`**:对齐上游 MySQL `word.word.status` 语义 `0=等待审核 / 1=已上线 / 2=已删除`(飞书 wiki 事实源定义)。MVP **不约束流转方向**,任意切换。将来加权限分层时再限制 1→2 需 admin。
 
 **backfill 策略**(新增 v2):migration 0011 在 ADD COLUMN 后立即 UPDATE 回填——已在 `serving.word_payload` 的词视为"已上线"(status=1),其余为 0。这和 MySQL 线上现状一致(mirror 脚本目前硬编码 status=1 也是基于这些词已上线的假设)。migration 与 backfill 是同一个 alembic upgrade 里的两步,人工跑。
+
+**status 对下游的语义契约**(Round 2 新增 P1):
+
+不加这段契约,`serving.word_payload` / OSS 导出 / MySQL mirror 对 `status=0/2` 的处理都会是猜的。三条数据流明示:
+
+1. **`domain.words → serving.word_payload`**(同事务 rebuild):
+   - `status=1`:正常 upsert `serving.word_payload`
+   - `status=0/2`:**DELETE `serving.word_payload WHERE word_id=:w`**(等待审核的 / 已删除的不进下游读模型)
+   - 对齐实施:扩展 `wordforge.db.serving.rebuild_word_payload(conn, word_id)`,内部先查 status,非 1 则 DELETE 而不是 upsert
+
+2. **pipeline export 路径新增词**(export.py):
+   - UPSERT `domain.words` 时**显式 SET `status=1`**(pipeline 出品默认上线,保持既有行为,migration 前后一致)
+   - 若未来要求"pipeline 产出也要 web 审核",那是另一次改动,本 MVP 不做
+
+3. **MySQL mirror**(field_mapping.py / mirror_to_mysql.py):
+   - 读 PG `domain.words.status`,写 MySQL `word.status`,语义一一对应(0/1/2)
+   - MVP 下 mirror 任意 status 值,不在 mirror 侧过滤(上游 DELETE serving.word_payload 已经隔绝了 app 可见性;MySQL 侧保留全量状态便于 words_core 未来按 status 查询)
+   - field_mapping 硬编码 `"status": 1` 必须改(§7.3 已列)
+
+**`idx_domain_words_status` 改成部分索引**(Round 2 修 P3):75k 词绝大多数 `status=1`(历史 + pipeline 未来默认 1),全量 B-Tree 索引扫 `status=1` 查询时优化器大概率走全表扫描,索引空间浪费。改成只索引需要被编辑器关心的 `WHERE status IN (0, 2)`:
+
+```sql
+CREATE INDEX idx_domain_words_status ON domain.words (status)
+  WHERE status IN (0, 2);
+```
 
 **`quality_flag TEXT`**:质量标注列,`none/suspect/fixed` 三态。来源不区分(LLM reviewer 或人工都写同一列,来源从 `meta.edit_audit` 查回)。部分索引只覆盖非 none 的少数行,成本低。
 
@@ -169,10 +194,12 @@ CREATE INDEX idx_editor_sessions_editor ON meta.editor_sessions (editor_id);
 ### 2.5 `meta.edit_audit`
 
 ```sql
+-- v3:新增 target_id 列,解决一词多子行时 audit 溯源失败问题
 CREATE TABLE meta.edit_audit (
   id            BIGSERIAL PRIMARY KEY,
   word_id       BIGINT NOT NULL,
   field_path    TEXT NOT NULL,
+  target_id     BIGINT,                                 -- v3 NEW
   op            TEXT NOT NULL CHECK (op IN ('update','insert','delete')),
   old_value     JSONB,
   new_value     JSONB,
@@ -184,6 +211,10 @@ CREATE INDEX idx_edit_audit_editor ON meta.edit_audit (editor_id, created_at DES
 ```
 
 - `word_id` **不加 FK**:允许 word 硬删时 audit 保留,防"失忆式注销"——哪天误删 word,审计历史不跟着消失;追溯被删词可 JOIN `old_value->'form'`
+- **`target_id BIGINT` (nullable)**(Round 2 新增 P1):针对**子表行**(meaning/mnemonic/sentence/phrase)改动,存被改的那行 PK。Round 2 gemini 发现:没有这列时,`field_path='meanings.cn_paraphrase' + word_id=999` 无法告诉我们"这词有 5 条 meaning,改的是哪一条"。
+  - `field_path='words.xxx'` 时 `target_id=NULL`(改主表)
+  - `field_path='meanings.xxx'` 时 `target_id=meaning_id`
+  - 同理 `mnemonics/sentences/phrases` 对应各自 PK
 - `editor_id` `ON DELETE RESTRICT`:删 editor 前 audit 必须空;正确做法是 `is_active=false` 软禁用
 - 不加 `session_id / request_id / ip_address / user_agent / reason`:YAGNI,痛了再加
 
@@ -316,24 +347,31 @@ PATCH /api/v1/words/{word_id}
        old_value: {...}, new_value: {...}}
     ]
   }
-  resp  200 OK data: {applied: N}
+  resp  200 OK data: {applied: N, inserted_ids: {meanings: [...], mnemonics: [...], sentences: [...], phrases: [...]}}
   err   409 conflict data: {drift: [{field_path, target_id, db_value, expected_old_value}]}
         404 not_found
 ```
+
+**关于 op=insert 的 ID 回传**(Round 2 修 P2):若 changes 里包含 `op='insert'` 的新行(如给词加一条 meaning),后端生成 BIGSERIAL PK 后**必须在响应 `inserted_ids` 里返回新分配的 id**,按表名分组。前端**必须用这些 id 更新本地状态**;若前端无法可靠合并(例如同批多行、多表),**fallback 协议**:前端在收到 200 后立即 `GET /api/v1/words/{word_id}` 重拉详情,覆盖本地状态。这样后续改该新行不会出现 `target_id` 缺失 400 错。
 
 **关键设计**:
 
 1. **显式 ID 寻址**:`field_path` 只声明"改哪张表哪个列",具体哪行由 `target_id` 指定(meaning_id/mnemonic_id/sentence_id)。不用 `meanings[3]` 数组索引——索引会因并发 insert/delete 错位
 2. **drift 策略:严格 rollback**:任一条 change 的 `old_value` 与 DB 当前值不符,整个事务 rollback 返 409,前端必须刷新重来。与 reviewer 批量跑"部分成功"策略不同——人的心理模型是"我看到的版本就是要改的版本",部分成功会让编辑误以为保存了
-3. **复用 reviewer.patch 的 low-level primitives,不复用整函数**(Round 1 修):
+3. **复用 reviewer.patch 仅限 `check_drift` + `PatchDriftError`,不复用 `apply_patch`**(Round 2 修 P1):
    - `wordforge.reviewer.patch.apply_patches_for_word` 是 **skip-on-drift** 语义(机器批跑部分成功可接受);web 场景要的是 **all-or-nothing**(人心理模型要求"看到的版本就是要改的版本")
-   - 两者语义不兼容,**不能直接复用整函数**
-   - 正确做法:web service 层新建 `wordforge.web.services.word_service.apply_web_changes(conn, word_id, changes)`,内部调用 `reviewer.patch.check_drift()` + `reviewer.patch.apply_patch()` 两个低层原语;**第一个 drift 处立即 raise `PatchDriftError`**,由外层 `engine.begin()` 上下文自动回滚整事务
+   - 更底层的 `apply_patch(conn, word_id, meaning_ids, patch)` 签名**硬依赖数组索引路径**(`meanings[i].cn_paraphrase`,i 从 `meaning_ids[i]` 映射),与 web 的**显式 `target_id` 寻址**根本不兼容,**不能直接调用**
+   - 正确做法:
+     - 可复用:`reviewer.patch.check_drift(path, current, old)` 纯比较函数 + `PatchDriftError` 异常类
+     - 自写:`wordforge.web.services.word_service.apply_web_changes(conn, word_id, changes)`,每条 change 走 "SELECT current → check_drift(new_value 处对比 old_value) → UPDATE WHERE id=target_id"
+   - **第一个 drift 处立即 raise `PatchDriftError`**,由外层 `engine.begin()` 上下文自动回滚整事务
    - `PatchDriftError` 冒到全局 exception handler → 409 `conflict`,response body 含 drift 列表(哪些 changes 与 DB 不符)
 4. **原子审计写入**:每条成功 change 在同事务内写一条 `meta.edit_audit`;任一方失败全回滚
-5. **serving.word_payload 同事务 rebuild**(Round 1 新增,P1 fix):
+5. **serving.word_payload 同事务 rebuild**(Round 1 新增 + Round 2 补充):
    - wordforge 现有 export stage 在改动 `domain.*` 后**同事务**调用 `_upsert_serving_word_payload(conn, word_id)` 重建下游读模型;web PATCH 若跳过,编辑结果不会进 `serving.word_payload`,下游 words_core 读到的是 stale 数据
    - 实施:把 `wordforge.stages.export.ExportStage._upsert_serving_word_payload` 提取为公共函数 `wordforge.db.serving.rebuild_word_payload(conn, word_id)`,export + web service 共用
+   - **提取时扩展**(Round 2 修 P2):既有实现产出的 JSONB payload 不含 `status / quality_flag`(这俩列 migration 0011 才加)。提取时把这两列加入 payload,保证下游消费者可见
+   - **status 语义 gate**(Round 2 修 P1,对齐 §2.1):`rebuild_word_payload` 内部先查 status——`1` 走 upsert,`0/2` 走 `DELETE FROM serving.word_payload WHERE word_id=:w`
    - web service 在 PATCH 事务末尾、POST 成功新建后、status/quality 切换后都调用一次
 6. **updated_at 规矩**(对齐 CLAUDE.md "数据模型地雷"):改 `domain.words` 时带 `updated_at = now()`;改 `meanings/mnemonics/sentences` 三张无 updated_at 列,不写
 
@@ -411,8 +449,17 @@ MVP 只做查询,不做"点一条 audit 就回滚"。audit 数据结构足够将
 
 ### 4.1 Auth 实现
 
-**密码存储**:
-- `argon2-cffi`(passlib 默认后端),默认参数 `time_cost=3, memory_cost=64*1024, parallelism=4`
+**密码存储**(v3 API 澄清):
+- **直接使用 `argon2-cffi` 的 `PasswordHasher` API**,**不使用 passlib**——v2 表述"passlib 默认后端"会误导实施,且 `[web]` extra 只装了 `argon2-cffi` 没装 `passlib`
+  ```python
+  from argon2 import PasswordHasher
+  ph = PasswordHasher()  # 默认参数 time_cost=3, memory_cost=65536 (64 MiB), parallelism=4
+  hashed = ph.hash(password)
+  try:
+      ph.verify(hashed, password)
+  except argon2.exceptions.VerifyMismatchError:
+      raise InvalidCredentials
+  ```
 - 永不记录明文密码(日志/审计/内部表均不存)
 - **argon2 verify/hash ~100ms CPU 阻塞**(Round 1 修,P1):web 的路由处理函数**统一声明为 sync `def`**(不是 `async def`),由 FastAPI/Starlette 自动调度到 threadpool。这与 wordforge 现有 sync `Engine` 匹配,避免 async-sync 混用 + 天然让 argon2/DB I/O 不阻塞 event loop
 - 不在 sync 路由里套 `asyncio.to_thread`(冗余);在 async 路由里必须 `await asyncio.to_thread(ph.verify, ...)`(本 MVP 不走此路径)
@@ -484,15 +531,16 @@ wordforge editors deactivate --email xxx
 - dev:Vite `proxy` 把 `/api` 转发到 `:8000`
 - prod:FastAPI 静态挂前端,同源,直接 `/api/v1`
 
-### 4.4 CORS
+### 4.4 CORS(Round 2 简化)
 
 - prod:同源,不需要 CORS
-- dev:FastAPI 开 CORS middleware 白名单 `http://localhost:5173`(仅 dev)
+- dev:**不开**后端 CORS middleware,**依赖 Vite dev server 的 `proxy` 抹平同源**(前端请求目标始终是 `http://localhost:5173/api/...`,浏览器不会触发 CORS 预检)。移除 v2 的后端 CORS 配置,避免冗余防御层和理解成本
 
 ### 4.5 连接池 + Engine 类型锁定
 
-**Engine 构造**(Round 1 修,P1):
+**Engine 构造**(Round 1+2 修,P1):
 - web 进程**独立**调用 `wordforge.db.engine.make_engine(url, pool_size=5, max_overflow=5)` 创建自己的 `Engine` 实例(不共享 pipeline 的)
+- **前置改造**(Round 2 发现 P2):现有 `wordforge.db.engine.make_engine(url: str | None = None) -> Engine` 不接受 pool kwargs,**M1 需扩展签名为 `make_engine(url: str | None = None, **engine_kwargs) -> Engine`**,kwargs 透传给 `create_engine`。一行改动,向后兼容
 - **只用 sync `Engine`**,**不引入 `AsyncEngine` / `create_async_engine`**,对齐 CLAUDE.md sync 路径 + 已有 `reviewer.patch` 等模块同构
 - 所有 route handler 声明为 sync `def`,FastAPI 自动调度到 threadpool(见 §4.1)
 - 所有 service 方法 sync,直接 `with engine.begin() as conn:`,不包 `asyncio.to_thread`
@@ -504,7 +552,9 @@ wordforge editors deactivate --email xxx
 
 ### 4.6 pytest env 污染规矩
 
-新加 `WORDFORGE_WEB_SECRET_KEY` 后,必须同步加入 `tests/test_cli.py::_LLM_PROVIDER_ENV_KEYS`(或同等 env-pop list),防止环境泄漏污染"无 LLM 路径"测试——对齐 CLAUDE.md 硬规矩。
+Round 1 砍掉 `WORDFORGE_WEB_SECRET_KEY` 后,MVP **不引入任何新的 LLM/provider 类 env**。`WORDFORGE_WEB_COOKIE_SECURE` 是 bool 配置、非 secret,不污染"无 LLM 路径"测试,**不必**加入 `_LLM_PROVIDER_ENV_KEYS`。
+
+未来迭代引入新 secret 时(如 JWT signing key),再同步更新 env-pop list,对齐 CLAUDE.md 硬规矩。
 
 ---
 
@@ -514,9 +564,9 @@ wordforge editors deactivate --email xxx
 
 **单元测试(`tests/web/unit/`)**:
 - `auth.py` password hash / token 生成/校验
-- `services/word_service.py` patch 落库(mock engine,验证事务边界)
-- `services/audit_service.py` audit 写入格式
-- cursor encode/decode + HMAC 签名校验
+- `services/word_service.py` patch 落库(mock engine,验证事务边界)+ apply_web_changes 自写 UPDATE 路径
+- `services/audit_service.py` audit 写入格式(含 `target_id` 正确性)
+- cursor encode/decode + decode 失败 400 处理(v3 砍 HMAC)
 - pydantic schemas 拒绝非法输入
 
 **集成测试(`tests/web/integration/`)—— 主战场**:
@@ -614,8 +664,10 @@ cd ..
 set -a
 source ~/.wordforge/prod.env
 set +a
-# 校验 target(避免误跑 test 或错的 DB)
-echo "migrate target: $DATABASE_URL" | grep -E 'wordforge[^_]' || { echo "WRONG DB"; exit 1; }
+# 校验 target(v3 修:不 echo 完整 DSN,避免密码泄漏到 scrollback)
+python -c "import os, urllib.parse as u; p=u.urlparse(os.environ['DATABASE_URL']); \
+  print(f'migrate target: host={p.hostname} db={p.path.lstrip(\"/\")} user={p.username}'); \
+  assert 'wordforge' in p.path and 'test' not in p.path, 'WRONG DB'"
 uv run alembic upgrade head
 # 起 web
 docker compose up -d wordforge-web
@@ -718,7 +770,7 @@ session cleanup 兜底(opportunistic):login endpoint 内顺手删除过期 sessi
 |---|---|---|
 | M1 基础设施 | alembic 0011 + `wordforge.web` 包骨架 + `wordforge web` CLI + docker service + `editors` CLI | 本地起服务 + CLI 建 editor |
 | M2 auth | login/logout/me + session 表 + cookie + argon2 + rate limit | 登录 + 7 天 cookie + 错密码限速 |
-| M3 只读 API | 搜词 + 详情 + audit 查询 + keyset cursor + HMAC | curl 能搜 + 看词全貌 |
+| M3 只读 API | 搜词 + 详情 + audit 查询 + keyset cursor(v3 砍 HMAC) | curl 能搜 + 看词全貌 |
 | M4 编辑写路径 | PATCH + drift rollback + audit 原子 + status/quality | 能改词 + drift 返 409 + audit 对 |
 | M5 新建词 | POST /words + UNIQUE 降级编辑 | 新建或跳编辑 |
 | M6 前端 SPA | Vite+React 工程 + 登录页 + 搜索页 + 详情编辑页 + 审计页 | UI 通手测 checklist |
@@ -751,6 +803,10 @@ session cleanup 兜底(opportunistic):login endpoint 内顺手删除过期 sessi
 | `word_forge/README.md` | "本地 Postgres 的定位"后加一小节 "Web Admin" | M7 发布 |
 | **`scripts/replicate/field_mapping.py`**(Round 1 新增 P1) | `row_to_mysql_word()` 改读 PG `domain.words.status` 列(目前硬编码 `"status": 1`)。Migration 0011 落地后,mirror 脚本若不同步改,会把所有词都强制写 MySQL status=1,丢掉 web admin 改动 | M1 migration 落地,与 migration 同 PR |
 | **`scripts/replicate/mirror_to_mysql.py`**(Round 1 新增 P1) | 同上:调用点改用新字段 | 同上 |
+| **`tests/replicate/test_field_mapping.py`**(Round 2 新增 P2) | 加入 status 映射测试:PG 0/1/2 → MySQL 0/1/2 三种 case。CI 命令 §5.5 扩展为 `uv run pytest tests/web/ tests/replicate/ -q` | M1 migration 落地,与 migration 同 PR |
+| `src/wordforge/stages/export.py`(Round 2 新增 P1) | UPSERT `domain.words` 时**显式 SET `status=1`**(pipeline 出品默认上线)。不改此处,migration 后 pipeline 新词全部落 `status=0` 进待审队列,下游 stale | M1 |
+| `src/wordforge/db/engine.py`(Round 2 新增 P2) | `make_engine()` 扩 `**engine_kwargs` 透传 `create_engine` | M1 |
+| `src/wordforge/db/serving.py`(Round 2 新增 P1,新文件) | 从 `stages/export.py` 提取 `rebuild_word_payload(conn, word_id)`,支持 status gate(1→upsert / 0,2→delete) + payload 含 status/quality_flag | M1 |
 | 飞书 wiki | **不更新** — wiki 只管 MySQL 上游事实源,PG domain.* 不进 wiki |
 
 ### 7.4 MVP 刻意不做清单
@@ -810,6 +866,27 @@ Round 1 发现,三方独立 review 后的修订清单(每条带源方和文档�
 
 v1 → v2 合计修订 17 处。全部修订后进 Round 2 fresh review 验证。
 
+### Round 2 Tri-Review 决策映射(v2 → v3)
+
+Round 2 三方独立 review 在 v2 挖出上一轮没发现的漏洞 + Round 1 fix 留下的内部不一致:
+
+| # | Severity | 来源 | 问题摘要 | 修订落点 |
+|---|---|---|---|---|
+| R2-U1 | **P1** | gemini | `meta.edit_audit` 缺 `target_id` 列,一词多子行时无法溯源 | §2.5 新增 `target_id BIGINT` + 语义说明 |
+| R2-C2 | **P1** | architect + gemini | `reviewer.patch.apply_patch` 用数组索引不兼容 web `target_id` 寻址 | §3.4 point 3 明确"只复用 check_drift + PatchDriftError,apply_patch 不能直接调" |
+| R2-C1 | **P1** | architect + codex + gemini | §4.6 / §5.1 / §7.1 M3 / 附录 B 残留 HMAC / `WORDFORGE_WEB_SECRET_KEY` 引用 | §4.6 重写 + §5.1 改"不测 HMAC" + §7.1 M3 注明砍 + 附录 B 注释更新 |
+| R2-C3 | **P1** | architect + codex | `domain.words.status` 对 `serving.word_payload` / pipeline export 新词 / OSS 下游契约未定义 | §2.1 新增"status 对下游的语义契约"三条,明确 1→upsert/0,2→delete + pipeline 显式 SET status=1 + mirror 全映射 |
+| R2-U3 | P2 | codex | argon2-cffi 直接 API vs "passlib 默认后端"措辞不一致,`[web]` extra 没装 passlib | §4.1 改为直接用 `argon2.PasswordHasher` |
+| R2-U2 | P2 | gemini | PATCH op=insert 响应没返回新建行 id,前端后续无 target_id | §3.4 resp 加 `inserted_ids` + 前端 fallback refetch 协议 |
+| R2-U4 | P2 | codex | migration 命令 `echo $DATABASE_URL` 把密码打到 scrollback | §6.2 改 python 解析 DSN 只 print host/db/user |
+| R2-C5 | P2 | codex | replicate 测试未纳入 `§5.5` CI | §7.3 新增 `tests/replicate/test_field_mapping.py` 行 + CI 命令扩展 |
+| R2-C4 | P2 | architect | `make_engine()` 签名不接 pool kwargs,spec 调用形式会炸 | §4.5 加 "M1 前置改造 `**engine_kwargs`" + §7.3 新增 engine.py 行 |
+| R2-U7 | P2 | architect | 提取的 `rebuild_word_payload` 必须扩 status/quality_flag 字段 | §3.4 point 5 明确扩展要求 + §7.3 新增 db/serving.py 行 |
+| R2-U5 | P3 | gemini | `idx_domain_words_status` 对倾斜数据无意义,应 partial | §2.1 改为 `WHERE status IN (0, 2)` |
+| R2-U6 | P3 | gemini | dev CORS middleware 冗余(Vite proxy 已抹平) | §4.4 删 CORS middleware |
+
+v2 → v3 合计修订 12 处。每条均过 Phase 2 三问(清理 / 澄清 / 补洞 / 文档一致性,无新增机制)。R2-U8(keyset cursor 过度)经 Phase 2 + 论据评估,**不 cut**——架构已成型、无额外维护负担,砍会动摇 Round 1 的 MVP 边界。全部修订后进 Round 3 fresh review 验证。
+
 ## 附录 B — 目录树预览
 
 ```
@@ -820,7 +897,7 @@ word_forge/
 │   │   ├── app.py                 # FastAPI factory
 │   │   ├── deps.py                # engine / current_editor 依赖注入
 │   │   ├── auth.py                # password hash + token 校验
-│   │   ├── security.py            # cursor HMAC + 其它
+│   │   ├── security.py            # session token hash、cookie 帮助函数(v3 砍 cursor HMAC)
 │   │   ├── errors.py              # 全局 exception handler + envelope
 │   │   ├── routes/
 │   │   │   ├── auth.py
