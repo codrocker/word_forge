@@ -460,6 +460,71 @@ def review_cmd(
         _sys.exit(rc)
 
 
+editors_app = typer.Typer(help="Manage web admin editor accounts.")
+app.add_typer(editors_app, name="editors")
+
+
+@editors_app.command("create")
+def editors_create(
+    email: str = typer.Option(..., help="Editor email (login ID)"),
+    display_name: str = typer.Option(..., help="Display name shown in audit"),
+) -> None:
+    """Create an editor account. Password read from stdin via getpass."""
+    import getpass
+
+    from wordforge.db.engine import make_engine
+    from wordforge.web.services.editor_service import create_editor
+
+    password = getpass.getpass("Password: ")
+    confirm = getpass.getpass("Confirm: ")
+    if password != confirm:
+        typer.echo("Passwords do not match", err=True)
+        raise typer.Exit(code=1)
+    if len(password) < 8:
+        typer.echo("Password must be at least 8 characters", err=True)
+        raise typer.Exit(code=1)
+    engine = make_engine()
+    try:
+        new_id = create_editor(engine, email, display_name, password)
+    finally:
+        engine.dispose()
+    typer.echo(f"Created editor id={new_id} email={email}")
+
+
+@editors_app.command("list")
+def editors_list() -> None:
+    """List all editor accounts."""
+    from wordforge.db.engine import make_engine
+    from wordforge.web.services.editor_service import list_editors
+
+    engine = make_engine()
+    try:
+        rows = list_editors(engine)
+    finally:
+        engine.dispose()
+    for e in rows:
+        status = "active" if e["is_active"] else "inactive"
+        typer.echo(
+            f"{e['id']:>5}  {e['email']:<40}  {status:<10}  {e['display_name']}"
+        )
+
+
+@editors_app.command("deactivate")
+def editors_deactivate(
+    email: str = typer.Option(..., help="Editor email to deactivate"),
+) -> None:
+    """Soft-deactivate an editor account (is_active=FALSE)."""
+    from wordforge.db.engine import make_engine
+    from wordforge.web.services.editor_service import deactivate_editor
+
+    engine = make_engine()
+    try:
+        deactivate_editor(engine, email)
+    finally:
+        engine.dispose()
+    typer.echo(f"Deactivated {email}")
+
+
 @app.command("web")
 def web_cmd(
     host: str = typer.Option("0.0.0.0", "--host", help="Bind address."),
