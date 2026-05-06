@@ -8,6 +8,7 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from wordforge.web.errors import envelope_err, register_exception_handlers
 from wordforge.web.middleware import RequestIDMiddleware
+from wordforge.web.routes.audit import router as audit_router
 from wordforge.web.routes.auth import limiter, router as auth_router
 from wordforge.web.routes.health import router as health_router
 from wordforge.web.routes.words import router as words_router
@@ -31,5 +32,6 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(auth_router)
     app.include_router(words_router)
+    app.include_router(audit_router)
     # Static SPA mount added in M7
     return app
