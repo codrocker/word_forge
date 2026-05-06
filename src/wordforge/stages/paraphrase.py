@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 import sqlalchemy as sa
 
 from wordforge.pipeline.fingerprint import fingerprint
-from wordforge.pipeline.runner import StagePayload
+from wordforge.pipeline.protocols import StagePayload
 from wordforge.stages._llm_base import (
     compute_prompt_content_hash,
     load_prompt,

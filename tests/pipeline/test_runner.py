@@ -11,7 +11,8 @@ import sqlalchemy as sa
 
 from wordforge.pipeline.artifacts import StageArtifactStore
 from wordforge.pipeline.budget import BudgetGate
-from wordforge.pipeline.runner import StagePayload, StageRunner
+from wordforge.pipeline.protocols import StagePayload
+from wordforge.pipeline.runner import StageRunner
 from wordforge.pipeline.runs import StageRunStore
 
 

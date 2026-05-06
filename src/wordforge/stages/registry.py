@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from wordforge.config import WordforgeConfig
     from wordforge.llm.client import LLMClient
     from wordforge.pipeline.artifacts import StageArtifactStore
-    from wordforge.pipeline.runner import Stage
+    from wordforge.pipeline.protocols import Stage
 
 # Spec §5 stage order — canonical sequence the runner follows.
 _SPEC_STAGE_ORDER = (

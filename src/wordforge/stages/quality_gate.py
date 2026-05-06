@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from wordforge.pipeline.fingerprint import fingerprint
-from wordforge.pipeline.runner import StagePayload
+from wordforge.pipeline.protocols import StagePayload
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import Engine

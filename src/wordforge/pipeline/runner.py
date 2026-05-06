@@ -29,10 +29,11 @@ import time
 import traceback
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING
 
 from wordforge.pipeline.artifacts import StageArtifactStore
 from wordforge.pipeline.budget import BudgetGate
+from wordforge.pipeline.protocols import Stage, StagePayload
 from wordforge.pipeline.runs import StageRunStore
 
 if TYPE_CHECKING:
@@ -111,27 +112,6 @@ class RunResult:
     ok_events: int = 0
     failed_events: int = 0
     skipped_events: int = 0
-
-
-@dataclass(kw_only=True)
-class StagePayload:
-    # Round 3 R3-gem-4: kw_only + defaults removes boilerplate for non-LLM
-    # stages (fetch_dict / phonetic / export) that only need payload + source.
-    payload: dict[str, Any] | list[Any]
-    source: str
-    model: str | None = None
-    prompt_version: str | None = None
-    cost_usd: float = 0.0
-    tokens_in: int | None = None
-    tokens_out: int | None = None
-    duration_ms: int | None = None
-
-
-class Stage(Protocol):
-    name: str
-
-    def expected_fingerprint(self, *, word_id: int) -> str: ...
-    async def run_one(self, *, word_id: int) -> StagePayload: ...
 
 
 @dataclass
