@@ -12,7 +12,7 @@ RDS and must be PHYSICALLY unreachable to pytest:
 
   prod → Ali Cloud RDS (rm-cn-*.rwlb.rds.aliyuncs.com)  ← pytest REFUSED
   dev  → Ali Cloud RDS (same)                            ← pytest REFUSED
-  test → local docker :5433 / wordforge_test             ← pytest ALLOWED
+  test → local docker :5434 / wordforge_test             ← pytest ALLOWED
 
 The guard below enforces: hostname must be localhost/127.0.0.1 AND
 database name must contain 'test'. Anything else aborts pytest.
@@ -79,8 +79,9 @@ def _guard_against_prod_db() -> None:
     """Refuse pytest unless DATABASE_URL is local-and-test-named.
 
     No escape hatch: prod is on Ali Cloud RDS so a different hostname. A
-    local docker test DB is always reachable (`docker compose up -d` +
-    `createdb wordforge_test`). No reason to ever bypass.
+    local docker test DB is always reachable (`docker compose -f
+    docker-compose.test.yml up -d` brings up `wordforge-pg-test` on port
+    5434 with `wordforge_test` preseeded). No reason to ever bypass.
     """
     url = database_url()
     ok, reason = _looks_like_test_db(url)
@@ -100,10 +101,9 @@ def _guard_against_prod_db() -> None:
         "against a disposable local docker database.\n"
         "\n"
         "To run tests:\n"
-        "  docker compose up -d\n"
-        "  docker exec wordforge-pg createdb -U wordforge wordforge_test\n"
+        "  docker compose -f docker-compose.test.yml up -d\n"
         "  export DATABASE_URL=postgresql+psycopg://wordforge:wordforge@\\\n"
-        "     localhost:5433/wordforge_test\n"
+        "     localhost:5434/wordforge_test\n"
         "  uv run pytest\n"
         "=============================================================\n"
     )

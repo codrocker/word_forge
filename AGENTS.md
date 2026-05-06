@@ -1,4 +1,4 @@
-# wordforge — Claude 指北
+# wordforge — Codex 指北
 
 git 库：`git@github.com:codrocker/word_forge.git`
 
@@ -37,15 +37,8 @@ git 库：`git@github.com:codrocker/word_forge.git`
 任何一条命令如果你想说"需要 root/DBA",先查 `user_service_1` 权限或 PG 的 `wordforge` 超级
 用户——十有八九已经够用。
 
-**跑脚本 / 测试的三条硬约定**:
+**跑脚本 / 测试的两条硬约定**:
 
-- **venv 用 uv 管理,本仓专用 `.venv/`,不要共享 `sailing_env` 等外部 venv**。首次
-  准备环境: `cd word_forge && uv sync --extra dev --extra llm`,会根据 `pyproject.toml`
-  建 `.venv/`(Python 3.12)+ 装完所有依赖 + 生成 `uv.lock`。日常加依赖用 `uv add <pkg>`
-  (而不是 `pip install` —— pip 装的不会写入 lockfile,下次 `uv sync` 会被清掉)。跑命令
-  两种姿势都行: `source .venv/bin/activate` 或前缀 `uv run`(例: `uv run pytest`)。理由:
-  wordforge / sailing / words_core 依赖版本早晚冲突,共享 venv 是雷;uv 比 pip/poetry
-  快 10-100x 且原生认 PEP 621 `pyproject.toml`,零迁移成本。
 - **pytest**:执行前必须 `export DATABASE_URL='postgresql+psycopg://wordforge:wordforge@localhost:5434/wordforge_test'`
   (本地 docker test db — `wordforge-pg-test` 容器,端口 **5434**,`docker-compose.test.yml` 起)。
   注意别和 dev 的 `wordforge-pg` 搞混(那个是 5433 / `wordforge`)。`tests/conftest.py` 的 guard
