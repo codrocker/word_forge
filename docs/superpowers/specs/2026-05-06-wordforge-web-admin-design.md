@@ -1,7 +1,7 @@
 # wordforge web admin — design spec
 
 > Date: 2026-05-06
-> Status: draft v3 (Round 2 tri-review 修订后,进入 Round 3)
+> Status: draft v3.1 (architect Round 3 APPROVED,吸收 2 x P2 + 4 x P3 文档澄清)
 > Owner: allen
 
 ## 背景
@@ -35,7 +35,7 @@ wordforge 当前是一个纯离线 LLM 词条生产 pipeline(asyncio + sqlalchem
 - CLAUDE.md "结构性 DDL 走 alembic migration,不手写 SQL"
 - CLAUDE.md "UPDATE 跨两个连接 = TOCTOU" → 所有编辑 + audit 同一事务
 - CLAUDE.md "写入前校验 old_value" → 复用 `wordforge.reviewer.patch.PatchDriftError` 同构
-- CLAUDE.md "凭证在 `~/.wordforge/`,不自建新文件" → 新增 `~/.wordforge/web.env` 承载 web 专用 secret
+- CLAUDE.md "凭证在 `~/.wordforge/`,不自建新文件" → MVP 零新增凭证文件(web.env 已砍,详见 §6.4)
 - CLAUDE.md "不允许吞异常(裸 `except Exception`)" → 全局 exception handler 统一分类,不吞
 - docs/shared/data-flow.md "app.meanings/mnemonics/sentences 无 updated_at" → 改这三张表时不写 updated_at
 - 上游 MySQL `word.word.status` 语义 `0=等待审核 / 1=已上线 / 2=已删除`(飞书 wiki 事实源) → 本次 PG 侧 `domain.words.status` 对齐该语义
@@ -225,6 +225,7 @@ CREATE INDEX idx_edit_audit_editor ON meta.edit_audit (editor_id, created_at DES
   1. `domain.words` 扩列(status / quality_flag)
   2. **backfill**:已在 `serving.word_payload` 的词 status=1,其余留 0(§2.1)
   3. 新 `meta` schema + 三张表 + 索引
+- **downgrade 路径**(Round 3 补):`ALTER TABLE domain.words DROP COLUMN status, DROP COLUMN quality_flag` + `DROP SCHEMA meta CASCADE`。rollback 仅用于 dev/test 验证;prod 一旦 upgrade 不 downgrade
 - **web 容器启动不碰 alembic**,部署前人工跑 `alembic upgrade head`(见 §6)
 
 ---
@@ -331,6 +332,14 @@ GET /api/v1/words/{word_id}
 
 一次请求聚合所有关联,前端不跳多页。
 
+**实施注意**(Round 3 补):`domain.sentences` 表**无 `word_id` 列**,只有 `meaning_id` FK。聚合时必须 JOIN:
+```sql
+SELECT s.* FROM domain.sentences s
+  JOIN domain.meanings m ON s.meaning_id = m.meaning_id
+ WHERE m.word_id = :w
+```
+直接 `SELECT * FROM domain.sentences WHERE word_id=:w` 会 `UndefinedColumn`。`domain.mnemonics / phrases` 有 `word_id` 列,不走 JOIN。
+
 **audio_us / audio_uk**:展示只读。MVP 不让编辑改音频(改 audio 需要文件上传,复杂度另一档,YAGNI)。
 
 ### 3.4 PATCH 保存编辑(核心写路径)
@@ -353,6 +362,12 @@ PATCH /api/v1/words/{word_id}
 ```
 
 **关于 op=insert 的 ID 回传**(Round 2 修 P2):若 changes 里包含 `op='insert'` 的新行(如给词加一条 meaning),后端生成 BIGSERIAL PK 后**必须在响应 `inserted_ids` 里返回新分配的 id**,按表名分组。前端**必须用这些 id 更新本地状态**;若前端无法可靠合并(例如同批多行、多表),**fallback 协议**:前端在收到 200 后立即 `GET /api/v1/words/{word_id}` 重拉详情,覆盖本地状态。这样后续改该新行不会出现 `target_id` 缺失 400 错。
+
+**`op='delete'` 的语义限定**(Round 3 修 P2):
+- PATCH 里 `op='delete'` **只用于删除子表行**(某条 meaning / mnemonic / sentence / phrase),`target_id` 为对应表的 PK
+- **删除词本身**走 `POST /words/{word_id}/status` 设 `new_value=2`(软删 `status=2` "已删除"),不走 PATCH `op='delete'`
+- 子表的 `op='delete'` 要求 body 提供 `old_value`(被删行的完整 JSON 快照),service 层对比 DB 当前值,不匹配 raise `PatchDriftError` → 409。这样"A 要删的那行和 B 刚改过的那行不是同一状态"时能阻止盲删
+- audit 记录 `op='delete'`,`old_value=<deleted row JSON>`,`new_value=NULL`
 
 **关键设计**:
 
@@ -783,7 +798,7 @@ session cleanup 兜底(opportunistic):login endpoint 内顺手删除过期 sessi
 | 风险 | 影响 | 缓解 |
 |---|---|---|
 | PATCH drift 频发 | 改完要刷新 | MVP 接受(3 人并发极低);后续可加字段级锁或 last-updated-by 展示 |
-| argon2 慢 | 登录 >1s | passlib 默认 ≈100ms,不是问题;否则降 memory_cost |
+| argon2 慢 | 登录 >1s | argon2-cffi 默认 ≈100ms,不是问题;否则降 memory_cost |
 | 前后端契约漂移 | 字段对不齐 | 短期:手测 checklist + code review;中期:openapi → ts types(非 MVP) |
 | 并发 UNIQUE 碰撞 | 两人同时新建同词 | service 捕 IntegrityError 转 409(Section 3.6) |
 | `~/.wordforge/` 挂载 | 远端拿不到凭证 | MVP 限定本机 docker;云部署 TBD |
@@ -886,6 +901,21 @@ Round 2 三方独立 review 在 v2 挖出上一轮没发现的漏洞 + Round 1 f
 | R2-U6 | P3 | gemini | dev CORS middleware 冗余(Vite proxy 已抹平) | §4.4 删 CORS middleware |
 
 v2 → v3 合计修订 12 处。每条均过 Phase 2 三问(清理 / 澄清 / 补洞 / 文档一致性,无新增机制)。R2-U8(keyset cursor 过度)经 Phase 2 + 论据评估,**不 cut**——架构已成型、无额外维护负担,砍会动摇 Round 1 的 MVP 边界。全部修订后进 Round 3 fresh review 验证。
+
+### Round 3 Architect APPROVED + 文档澄清(v3 → v3.1)
+
+Round 3 architect 返回 **APPROVED FOR IMPLEMENTATION**(0 P0 / 0 P1)。codex + gemini 未完成此轮(流程被主动结束)。architect 给出 2 个 P2 + 4 个 P3 文档澄清,已全部落 v3.1:
+
+| # | Severity | 议题 | 修订落点 |
+|---|---|---|---|
+| R3-P2-1 | P2 | GET 详情页 sentences 聚合需 JOIN(`domain.sentences` 无 `word_id`) | §3.3 末加"实施注意" |
+| R3-P2-2 | P2 | PATCH `op='delete'` 语义未限定 | §3.4 加"op='delete' 语义限定":仅子表行;删词走 POST /status |
+| R3-P3-1 | P3 | pydantic schema 要求 `op='update'` 时 `old_value` 非 null(否则 check_drift opt-out) | 实施备注,已在 §3.4 check_drift 逻辑中隐含 |
+| R3-P3-2 | P3 | §7.2 风险表 "passlib 默认 ≈100ms" 残留(v3 已砍 passlib) | 改为 "argon2-cffi 默认 ≈100ms" |
+| R3-P3-3 | P3 | line 38 "新增 ~/.wordforge/web.env" 与 §6.4 砍矛盾 | 改为 "MVP 零新增凭证文件(web.env 已砍,详见 §6.4)" |
+| R3-P3-4 | P3 | migration 0011 downgrade 路径未写 | §2.6 加一行 downgrade 指令 |
+
+**收敛状态**:architect 单方 APPROVED + v3.1 所有 P2/P3 已落盘;codex + gemini 第三轮未独立验证——以用户明确决策为准,进 writing-plans 阶段。残余风险: codex/gemini 可能在 v3.1 仍找到未知 finding;若实施阶段发现,通过常规 PR review 修正。
 
 ## 附录 B — 目录树预览
 
