@@ -102,6 +102,26 @@ git 库：`git@github.com:codrocker/word_forge.git`
   `asyncio.Semaphore` 限流;阻塞 IO 走 `asyncio.to_thread`;显式
   `loop.set_default_executor(ThreadPoolExecutor(max_workers=...))` 控制规模。
 
+### Web Admin
+
+- **Engine 是 sync-only**。`wordforge.web` 用 `make_engine(echo=False)` 的同步 SA engine,
+  不是 async。FastAPI route 全用 `def`(非 `async def`),uvicorn 自动放线程池跑。
+  不要引入 `create_async_engine` —— 跟 pipeline 共用 engine factory 保持一致。
+- **`wordforge editors` CLI** 管理编辑者账号。`uv run wordforge editors create --email X --display-name Y`。
+  账号存 `meta.editors` 表,密码走 bcrypt。停用: `uv run wordforge editors deactivate --email X`。
+- **`WORDFORGE_WEB_COOKIE_SECURE` env 开关**。prod 默认 `true`(HTTPS);本地 dev 设 `false`
+  才能在 HTTP 上写 session cookie。忘设 → 登录 200 但 cookie 不落地 → /me 401 循环。
+- **`serving.word_payload` 由 web PATCH 同事务 rebuild**。编辑者改 `domain.words` 任何字段后,
+  同一个 `engine.begin()` 里调 `rebuild_word_payload(conn, word_id)` 重建 serving 行。
+  不允许"先写 domain 再异步刷 serving"——两步之间宕机 = 数据不一致,且无补偿机制。
+- **status 语义**:`domain.words.status` SMALLINT: 0=审核中, 1=上线, 2=已删除。
+  status=1 → serving 有数据; 0/2 → serving 该行删除。pipeline export 默认 SET status=1;
+  mirror_to_mysql 透传 PG status 到 MySQL status。
+- **测试 fixture 对 alembic downgrade 的保护**。`tests/web/conftest.py` 有 session-scope
+  `_ensure_alembic_head` fixture,在 web test 收集前跑 `alembic upgrade head`。原因:
+  `tests/db/` 的 migration 测试会 `downgrade base`,若 pytest 先跑 db 再跑 web,
+  表全丢。该 fixture 保证 web test 前 schema 完整。不要删它或改成 function-scope。
+
 ## Bedrock 从中国大陆调用
 
 - **必走代理 + 已内置 Config**。Bedrock 封中国 IP;默认 timeout 对"半死"代理无效。
