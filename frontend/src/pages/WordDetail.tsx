@@ -123,6 +123,12 @@ export function WordDetail() {
         <h1 className="text-2xl font-bold text-gray-900">
           {data.word.form}
         </h1>
+        <Link
+          to={`/audit?word_id=${wordId}`}
+          className="ml-auto text-sm text-blue-600 hover:underline"
+        >
+          Audit Log
+        </Link>
       </div>
 
       {/* Status / Quality toggle — independent mutations */}

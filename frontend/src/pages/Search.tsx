@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { useSearchWordsQuery } from '@/api/words';
 import { ApiError } from '@/api/client';
 import { WordTable } from '@/components/words/WordTable';
@@ -96,7 +96,12 @@ export function Search() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">
-      <h1 className="mb-6 text-2xl font-bold text-gray-900">Words</h1>
+      <div className="mb-6 flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-gray-900">Words</h1>
+        <Link to="/audit" className="text-sm text-blue-600 hover:underline">
+          Audit Log &rarr;
+        </Link>
+      </div>
 
       <div className="mb-4">
         <FilterBar
