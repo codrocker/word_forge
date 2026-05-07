@@ -50,3 +50,41 @@ class StatusChangeRequest(BaseModel):
 class QualityChangeRequest(BaseModel):
     old_value: Literal["none", "suspect", "fixed"]
     new_value: Literal["none", "suspect", "fixed"]
+
+
+# --- M5.1: CreateWord ---
+
+
+class MeaningIn(BaseModel):
+    pos: int | None = None
+    pos_sub: int | None = None
+    cn_paraphrase: str | None = None
+    en_paraphrase: str | None = None
+
+
+class MnemonicIn(BaseModel):
+    type: int = 1
+    content: dict
+
+
+class SentenceIn(BaseModel):
+    meaning_index: int
+    form: str
+    translation: str
+    highlight: dict | None = None
+
+
+class PhraseIn(BaseModel):
+    form: str
+    meaning: str | None = None
+
+
+class CreateWordRequest(BaseModel):
+    form: str
+    type: Literal[1, 2]
+    phonetic_us: str | None = None
+    phonetic_uk: str | None = None
+    meanings: list[MeaningIn] = []
+    mnemonics: list[MnemonicIn] = []
+    sentences: list[SentenceIn] = []
+    phrases: list[PhraseIn] = []

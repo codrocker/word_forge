@@ -1,16 +1,22 @@
-"""Words routes: search + detail (M3) + patch (M4.3)."""
+"""Words routes: search + detail (M3) + patch (M4.3) + create (M5.1)."""
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from wordforge.db.serving import rebuild_word_payload
 from wordforge.web.cursor import decode as decode_cursor, encode as encode_cursor
 from wordforge.web.deps import current_editor, get_engine
-from wordforge.web.errors import envelope_ok
-from wordforge.web.schemas.words import PatchRequest, QualityChangeRequest, StatusChangeRequest
-from wordforge.web.services.word_service import apply_web_changes
+from wordforge.web.errors import envelope_err, envelope_ok
+from wordforge.web.schemas.words import (
+    CreateWordRequest,
+    PatchRequest,
+    QualityChangeRequest,
+    StatusChangeRequest,
+)
+from wordforge.web.services.word_service import apply_web_changes, create_web_word
 
 router = APIRouter(prefix="/api/v1/words", dependencies=[Depends(current_editor)])
 
@@ -70,6 +76,29 @@ def search(
             "updated_at_desc", last["updated_at"].isoformat(), last["word_id"]
         )
     return envelope_ok({"items": items, "next_cursor": next_cursor})
+
+
+@router.post("", status_code=201)
+def create_word(
+    body: CreateWordRequest,
+    editor: dict = Depends(current_editor),
+    engine: Engine = Depends(get_engine),
+):
+    with engine.begin() as conn:
+        word_id, created = create_web_word(
+            conn, body=body.model_dump(), editor_id=editor["id"]
+        )
+        if not created:
+            return JSONResponse(
+                status_code=409,
+                content=envelope_err(
+                    "conflict",
+                    "form+type already exists",
+                    {"word_id": word_id, "reason": "already_exists"},
+                ),
+            )
+        rebuild_word_payload(conn, word_id)
+    return envelope_ok({"word_id": word_id, "created": True})
 
 
 @router.get("/{word_id}")

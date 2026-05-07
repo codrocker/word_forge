@@ -8,13 +8,17 @@ Per spec §3.4:
 """
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
+from sqlalchemy.exc import IntegrityError
 
 from wordforge.reviewer.patch import PatchDriftError, check_drift
 from wordforge.web.services.audit_service import write_audit
+
+HUMAN_WEB = "human:web"
 
 # field_path → (table, column, has_updated_at)
 # Only listed fields are editable via PATCH.
@@ -94,3 +98,167 @@ def apply_web_changes(
         )
         applied += 1
     return applied
+
+
+def create_web_word(conn: Connection, *, body: dict[str, Any], editor_id: int) -> tuple[int, bool]:
+    """Create a word with sub-tables. Return (word_id, created).
+
+    created=False when form+type already exists (UNIQUE conflict).
+    All sub-table source fields are forced to 'human:web'.
+    """
+    form = body["form"].strip()
+    type_ = body["type"]
+
+    # --- Check existing ---
+    existing = conn.execute(
+        text("SELECT word_id FROM domain.words WHERE form = :f AND type = :t"),
+        {"f": form, "t": type_},
+    ).first()
+    if existing is not None:
+        return existing.word_id, False
+
+    # --- Insert word ---
+    try:
+        row = conn.execute(
+            text(
+                "INSERT INTO domain.words (type, form, phonetic_us, phonetic_uk, source, status, quality_flag) "
+                "VALUES (:t, :f, :pu, :pk, :src, 0, 'none') RETURNING word_id"
+            ),
+            {
+                "t": type_,
+                "f": form,
+                "pu": body.get("phonetic_us"),
+                "pk": body.get("phonetic_uk"),
+                "src": HUMAN_WEB,
+            },
+        ).first()
+    except IntegrityError:
+        # Concurrent insert won the race
+        conn.rollback()
+        existing = conn.execute(
+            text("SELECT word_id FROM domain.words WHERE form = :f AND type = :t"),
+            {"f": form, "t": type_},
+        ).first()
+        return existing.word_id, False
+
+    word_id = row.word_id
+    write_audit(
+        conn,
+        word_id=word_id,
+        field_path="words",
+        target_id=None,
+        op="insert",
+        old_value=None,
+        new_value={"form": form, "type": type_},
+        editor_id=editor_id,
+    )
+
+    # --- Meanings ---
+    meaning_ids: list[int] = []
+    for m in body.get("meanings") or []:
+        mrow = conn.execute(
+            text(
+                "INSERT INTO domain.meanings "
+                "(word_id, pos, pos_sub, cn_paraphrase, en_paraphrase, source) "
+                "VALUES (:w, :p, :ps, :cn, :en, :src) RETURNING meaning_id"
+            ),
+            {
+                "w": word_id,
+                "p": m.get("pos"),
+                "ps": m.get("pos_sub"),
+                "cn": m.get("cn_paraphrase"),
+                "en": m.get("en_paraphrase"),
+                "src": HUMAN_WEB,
+            },
+        ).first()
+        meaning_ids.append(mrow.meaning_id)
+        write_audit(
+            conn,
+            word_id=word_id,
+            field_path="meanings",
+            target_id=mrow.meaning_id,
+            op="insert",
+            old_value=None,
+            new_value=m,
+            editor_id=editor_id,
+        )
+
+    # --- Sentences (meaning_index → meaning_id) ---
+    for s in body.get("sentences") or []:
+        mid = meaning_ids[s["meaning_index"]]
+        srow = conn.execute(
+            text(
+                "INSERT INTO domain.sentences "
+                "(meaning_id, form, translation, highlight, source) "
+                "VALUES (:m, :f, :t, :h, :src) RETURNING sentence_id"
+            ),
+            {
+                "m": mid,
+                "f": s["form"],
+                "t": s["translation"],
+                "h": json.dumps(s["highlight"], ensure_ascii=False) if s.get("highlight") else None,
+                "src": HUMAN_WEB,
+            },
+        ).first()
+        write_audit(
+            conn,
+            word_id=word_id,
+            field_path="sentences",
+            target_id=srow.sentence_id,
+            op="insert",
+            old_value=None,
+            new_value=s,
+            editor_id=editor_id,
+        )
+
+    # --- Mnemonics ---
+    for mn in body.get("mnemonics") or []:
+        mnrow = conn.execute(
+            text(
+                "INSERT INTO domain.mnemonics (word_id, type, content, source) "
+                "VALUES (:w, :t, :c, :src) RETURNING mnemonic_id"
+            ),
+            {
+                "w": word_id,
+                "t": mn.get("type", 1),
+                "c": json.dumps(mn["content"], ensure_ascii=False),
+                "src": HUMAN_WEB,
+            },
+        ).first()
+        write_audit(
+            conn,
+            word_id=word_id,
+            field_path="mnemonics",
+            target_id=mnrow.mnemonic_id,
+            op="insert",
+            old_value=None,
+            new_value=mn,
+            editor_id=editor_id,
+        )
+
+    # --- Phrases (owner_word_id, not word_id) ---
+    for ph in body.get("phrases") or []:
+        prow = conn.execute(
+            text(
+                "INSERT INTO domain.phrases (owner_word_id, form, meaning, source) "
+                "VALUES (:w, :f, :m, :src) RETURNING phrase_id"
+            ),
+            {
+                "w": word_id,
+                "f": ph["form"],
+                "m": ph.get("meaning"),
+                "src": HUMAN_WEB,
+            },
+        ).first()
+        write_audit(
+            conn,
+            word_id=word_id,
+            field_path="phrases",
+            target_id=prow.phrase_id,
+            op="insert",
+            old_value=None,
+            new_value=ph,
+            editor_id=editor_id,
+        )
+
+    return word_id, True
