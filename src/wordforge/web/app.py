@@ -1,8 +1,12 @@
 """FastAPI app factory."""
 from __future__ import annotations
 
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+import logging
+from pathlib import Path
+
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
@@ -33,5 +37,28 @@ def create_app() -> FastAPI:
     app.include_router(auth_router)
     app.include_router(words_router)
     app.include_router(audit_router)
-    # Static SPA mount added in M7
+    # Static SPA — must be last so API routes take precedence
+    dist_dir = Path(__file__).resolve().parent.parent.parent.parent / "frontend" / "dist"
+    if dist_dir.is_dir() and (dist_dir / "index.html").exists():
+        # Serve /assets/* (Vite build artifacts)
+        assets_dir = dist_dir / "assets"
+        if assets_dir.is_dir():
+            app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+
+        # SPA catch-all: any non-API path returns index.html for client-side routing
+        _index_html = (dist_dir / "index.html").read_text()
+
+        @app.get("/{full_path:path}", include_in_schema=False)
+        async def _spa_catchall(request: Request, full_path: str) -> HTMLResponse:
+            # Let API paths fall through to the 404 handler
+            if full_path.startswith("api/"):
+                return JSONResponse(
+                    status_code=404,
+                    content=envelope_err("not_found", f"/{full_path} not found"),
+                )
+            return HTMLResponse(_index_html)
+    else:
+        logging.getLogger(__name__).warning(
+            "frontend/dist not found or missing index.html; SPA static mount skipped"
+        )
     return app
