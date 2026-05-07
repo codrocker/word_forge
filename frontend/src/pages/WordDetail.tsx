@@ -64,15 +64,16 @@ export function WordDetail() {
           setPendingChanges([]);
         },
         onError: (e) => {
+          const reqSuffix = e instanceof ApiError && e.requestId ? ` (req: ${e.requestId})` : '';
           if (e instanceof ApiError && e.code === 'conflict') {
-            toast.error('Conflict: someone else modified this word. Please refresh and retry.');
+            toast.error('Conflict: someone else modified this word. Please refresh and retry.' + reqSuffix);
             setShowDiff(false);
             // Invalidate to fetch latest, but preserve user form state
             void queryClient.invalidateQueries({
               queryKey: ['words', 'detail', wordId],
             });
           } else {
-            toast.error(e instanceof ApiError ? e.message : 'Save failed');
+            toast.error((e instanceof ApiError ? e.message : 'Save failed') + reqSuffix);
           }
         },
       },
@@ -85,10 +86,11 @@ export function WordDetail() {
       {
         onSuccess: () => toast.success('Status updated'),
         onError: (e) => {
+          const reqSuffix = e instanceof ApiError && e.requestId ? ` (req: ${e.requestId})` : '';
           if (e instanceof ApiError && e.code === 'conflict') {
-            toast.error('Status conflict: refresh and retry');
+            toast.error('Status conflict: refresh and retry' + reqSuffix);
           } else {
-            toast.error(e instanceof ApiError ? e.message : 'Failed');
+            toast.error((e instanceof ApiError ? e.message : 'Failed') + reqSuffix);
           }
         },
       },
@@ -101,10 +103,11 @@ export function WordDetail() {
       {
         onSuccess: () => toast.success('Quality updated'),
         onError: (e) => {
+          const reqSuffix = e instanceof ApiError && e.requestId ? ` (req: ${e.requestId})` : '';
           if (e instanceof ApiError && e.code === 'conflict') {
-            toast.error('Quality conflict: refresh and retry');
+            toast.error('Quality conflict: refresh and retry' + reqSuffix);
           } else {
-            toast.error(e instanceof ApiError ? e.message : 'Failed');
+            toast.error((e instanceof ApiError ? e.message : 'Failed') + reqSuffix);
           }
         },
       },
