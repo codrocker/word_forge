@@ -1,14 +1,33 @@
 """rebuild_word_payload: status=1 upserts serving; status=0/2 deletes."""
 from __future__ import annotations
 
+import subprocess
+from pathlib import Path
+
 import pytest
 from sqlalchemy import text
 
 from wordforge.db.engine import make_engine
 
+# Guard against DB state pollution from sibling tests that downgrade base
+# (e.g. test_app_schema / test_migrations teardown `alembic downgrade base`).
+# Ensure the test DB is at head before we run.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _ensure_head() -> None:
+    subprocess.run(
+        ["uv", "run", "alembic", "upgrade", "head"],
+        cwd=_REPO_ROOT,
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
 
 @pytest.fixture
 def engine():
+    _ensure_head()
     eng = make_engine()
     yield eng
     eng.dispose()
