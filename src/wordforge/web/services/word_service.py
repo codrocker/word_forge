@@ -35,6 +35,9 @@ FIELD_MAP: dict[str, tuple[str, str, bool]] = {
     "mnemonics.content": ("domain.mnemonics", "content", False),
     "sentences.form": ("domain.sentences", "form", False),
     "sentences.translation": ("domain.sentences", "translation", False),
+    # domain.phrases: owner_word_id (not word_id), columns are form + meaning
+    "phrases.form": ("domain.phrases", "form", False),
+    "phrases.meaning": ("domain.phrases", "meaning", False),
 }
 
 # table → primary key column
@@ -43,6 +46,7 @@ _PK_COL: dict[str, str] = {
     "domain.meanings": "meaning_id",
     "domain.mnemonics": "mnemonic_id",
     "domain.sentences": "sentence_id",
+    "domain.phrases": "phrase_id",
 }
 
 

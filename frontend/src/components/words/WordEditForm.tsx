@@ -112,7 +112,7 @@ export function WordEditForm({
             Mnemonics
           </h2>
           <div className="space-y-3">
-            {mnemonicFields.map((field, i) => (
+            {mnemonicFields.map((field) => (
               <div
                 key={field._key}
                 className="rounded border border-gray-100 bg-gray-50 p-3"
@@ -120,10 +120,12 @@ export function WordEditForm({
                 <span className="mb-2 inline-block text-xs text-gray-400">
                   #{field.mnemonic_id}
                 </span>
-                <AppFormInput
-                  label="Content"
-                  {...register(`mnemonics.${i}.content`)}
-                />
+                <div className="text-xs text-gray-400">
+                  Content (JSONB, read-only in MVP):
+                </div>
+                <pre className="mt-1 max-h-40 overflow-auto rounded bg-gray-100 p-2 text-xs text-gray-700">
+                  {JSON.stringify(field.content, null, 2)}
+                </pre>
               </div>
             ))}
           </div>
@@ -182,8 +184,8 @@ export function WordEditForm({
                     {...register(`phrases.${i}.form`)}
                   />
                   <AppFormInput
-                    label="Translation"
-                    {...register(`phrases.${i}.translation`)}
+                    label="Meaning"
+                    {...register(`phrases.${i}.meaning`)}
                   />
                 </div>
               </div>

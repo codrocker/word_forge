@@ -26,7 +26,7 @@ export type WordDetailForm = {
   }[];
   mnemonics: {
     mnemonic_id: number;
-    content: string;
+    content: unknown; // JSONB — read-only in MVP
   }[];
   sentences: {
     sentence_id: number;
@@ -36,7 +36,7 @@ export type WordDetailForm = {
   phrases: {
     phrase_id: number;
     form: string;
-    translation: string;
+    meaning: string; // actual column (not 'translation')
   }[];
 };
 
@@ -103,22 +103,7 @@ export function diffChanges(
     }
   });
 
-  // mnemonics[i].content
-  (dirtyFields.mnemonics ?? []).forEach((dm: any, i: number) => {
-    if (!dm) return;
-    const m = current.mnemonics[i];
-    const d = defaults.mnemonics[i];
-    if (!m || !d) return;
-    if (dm.content) {
-      changes.push({
-        field_path: 'mnemonics.content',
-        target_id: m.mnemonic_id,
-        op: 'update',
-        old_value: d.content,
-        new_value: m.content,
-      });
-    }
-  });
+  // mnemonics.content is JSONB — MVP keeps it read-only, no diff emitted
 
   // sentences[i].form / translation
   (dirtyFields.sentences ?? []).forEach((dm: any, i: number) => {
@@ -161,13 +146,13 @@ export function diffChanges(
         new_value: m.form,
       });
     }
-    if (dm.translation) {
+    if (dm.meaning) {
       changes.push({
-        field_path: 'phrases.translation',
+        field_path: 'phrases.meaning',
         target_id: m.phrase_id,
         op: 'update',
-        old_value: d.translation,
-        new_value: m.translation,
+        old_value: d.meaning,
+        new_value: m.meaning,
       });
     }
   });

@@ -12,7 +12,7 @@ export function useMeQuery() {
   return useQuery<Editor>({
     queryKey: ['me'],
     queryFn: async () => {
-      const res = await client.get<Envelope<Editor>>('/me');
+      const res = await client.get<Envelope<Editor>>('/auth/me');
       return res.data.data;
     },
     staleTime: Infinity,
@@ -26,7 +26,7 @@ export function useLoginMutation() {
 
   return useMutation({
     mutationFn: async (payload: LoginPayload) => {
-      await client.post<Envelope<null>>('/login', payload);
+      await client.post<Envelope<null>>('/auth/login', payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['me'] });
@@ -41,7 +41,7 @@ export function useLogoutMutation() {
 
   return useMutation({
     mutationFn: async () => {
-      await client.post<Envelope<null>>('/logout');
+      await client.post<Envelope<null>>('/auth/logout');
     },
     onSuccess: () => {
       queryClient.clear();

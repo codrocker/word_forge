@@ -1,11 +1,13 @@
 """Auth request/response pydantic schemas."""
 from __future__ import annotations
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    # Plain str — EmailStr rejects .local/.test/.localhost (RFC 6761 reserved
+    # TLDs) which are legitimate for internal admin accounts.
+    email: str
     password: str
 
 

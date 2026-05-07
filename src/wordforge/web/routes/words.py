@@ -135,7 +135,8 @@ def detail(word_id: int, engine: Engine = Depends(get_engine)):
         ).mappings().all()
         phrases = conn.execute(
             text(
-                "SELECT * FROM domain.phrases WHERE word_id = :w ORDER BY phrase_id"
+                # NOTE: domain.phrases uses `owner_word_id`, not `word_id`
+                "SELECT * FROM domain.phrases WHERE owner_word_id = :w ORDER BY phrase_id"
             ),
             {"w": word_id},
         ).mappings().all()
