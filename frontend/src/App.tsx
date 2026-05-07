@@ -3,6 +3,7 @@ import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
 import { LoginPage } from '@/pages/Login';
 import { NotFoundPage } from '@/pages/NotFound';
 import { Search } from '@/pages/Search';
+import { WordDetail } from '@/pages/WordDetail';
 
 export default function App() {
   return (
@@ -11,6 +12,7 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route element={<ProtectedRoute />}>
           <Route path="/" element={<Search />} />
+          <Route path="/words/:id" element={<WordDetail />} />
         </Route>
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
