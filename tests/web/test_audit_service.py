@@ -5,12 +5,13 @@ from sqlalchemy import text
 from wordforge.db.engine import make_engine
 from wordforge.web.services.audit_service import write_audit
 from wordforge.web.services.editor_service import create_editor
+from tests.web.conftest import TEST_PASSWORD
 
 
 @pytest.fixture
 def engine_and_editor():
     e = make_engine()
-    eid = create_editor(e, "test-audit-svc@wordforge.local", "AS", "pw1234ok")
+    eid = create_editor(e, "test-audit-svc@wordforge.local", "AS", TEST_PASSWORD)
     yield e, eid
     with e.begin() as conn:
         conn.execute(text("DELETE FROM meta.edit_audit WHERE editor_id = :i"), {"i": eid})

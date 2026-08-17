@@ -5,9 +5,10 @@ from sqlalchemy import text
 from wordforge.db.engine import make_engine
 from wordforge.web.app import create_app
 from wordforge.web.services.editor_service import create_editor
+from tests.web.conftest import TEST_PASSWORD
 
 
-def _login_client(email: str, pw: str = "pw1234ok") -> TestClient:
+def _login_client(email: str, pw: str = TEST_PASSWORD) -> TestClient:
     create_editor(make_engine(), email, "RT", pw)
     c = TestClient(create_app())
     r = c.post("/api/v1/auth/login", json={"email": email, "password": pw})

@@ -6,11 +6,12 @@ from sqlalchemy import text
 from wordforge.db.engine import make_engine
 from wordforge.web.app import create_app
 from wordforge.web.services.editor_service import create_editor
+from tests.web.conftest import TEST_PASSWORD
 
 
 def _setup(email: str, form: str, initial_status: int = 1, initial_quality: str = "none"):
     e = make_engine()
-    create_editor(e, email, "SQ", "pw1234ok")
+    create_editor(e, email, "SQ", TEST_PASSWORD)
     with e.begin() as conn:
         row = conn.execute(
             text(
@@ -32,7 +33,7 @@ def _setup(email: str, form: str, initial_status: int = 1, initial_quality: str 
                 {"w": wid, "form": form, "p": '{"status": 1}'},
             )
     c = TestClient(create_app())
-    r = c.post("/api/v1/auth/login", json={"email": email, "password": "pw1234ok"})
+    r = c.post("/api/v1/auth/login", json={"email": email, "password": TEST_PASSWORD})
     assert r.status_code == 200, r.text
     return c, wid
 

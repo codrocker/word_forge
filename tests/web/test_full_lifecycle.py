@@ -7,10 +7,11 @@ from sqlalchemy import text
 from wordforge.db.engine import make_engine
 from wordforge.web.app import create_app
 from wordforge.web.services.editor_service import create_editor
+from tests.web.conftest import TEST_PASSWORD
 
 _EMAIL = "test-lifecycle-e2e@wordforge.dev"
 _FORM = "lifecycle_test_word"
-_PW = "pw1234ok"
+_PW = TEST_PASSWORD
 
 
 def _seed():

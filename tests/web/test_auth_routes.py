@@ -5,6 +5,7 @@ from sqlalchemy import text
 from wordforge.db.engine import make_engine
 from wordforge.web.app import create_app
 from wordforge.web.services.editor_service import create_editor
+from tests.web.conftest import TEST_PASSWORD
 
 
 def _cleanup(email: str) -> None:
@@ -23,10 +24,10 @@ def _cleanup(email: str) -> None:
 
 def test_login_me_logout_cycle():
     email = "test-auth-cycle@wordforge.dev"
-    create_editor(make_engine(), email, "AC", "pw1234ok")
+    create_editor(make_engine(), email, "AC", TEST_PASSWORD)
     client = TestClient(create_app())
     try:
-        r = client.post("/api/v1/auth/login", json={"email": email, "password": "pw1234ok"})
+        r = client.post("/api/v1/auth/login", json={"email": email, "password": TEST_PASSWORD})
         assert r.status_code == 200, r.text
         assert r.json()["ok"] is True
         assert "session" in r.cookies

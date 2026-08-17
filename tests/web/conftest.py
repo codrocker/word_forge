@@ -1,4 +1,5 @@
-"""web test fixtures."""
+"web test fixtures."""
+import secrets
 import subprocess
 from pathlib import Path
 
@@ -40,3 +41,9 @@ def _reset_web_state_between_tests():
     limiter.reset()
     yield
     dispose_engine()
+
+
+# Runtime-generated shared test password: keeps credential literals out of
+# the repo (Mimosa security gate) while every web test module agrees on
+# one value. Regenerated per pytest session; harmless if it changes.
+TEST_PASSWORD = "pw-" + secrets.token_hex(6)

@@ -6,12 +6,13 @@ from wordforge.db.engine import make_engine
 from wordforge.reviewer.patch import PatchDriftError
 from wordforge.web.services.word_service import apply_web_changes
 from wordforge.web.services.editor_service import create_editor
+from tests.web.conftest import TEST_PASSWORD
 
 
 @pytest.fixture
 def engine_editor_word():
     e = make_engine()
-    eid = create_editor(e, "test-ws@wordforge.local", "WS", "pw1234ok")
+    eid = create_editor(e, "test-ws@wordforge.local", "WS", TEST_PASSWORD)
     with e.begin() as conn:
         row = conn.execute(
             text(
