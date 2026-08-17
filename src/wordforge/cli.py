@@ -171,31 +171,16 @@ def run_cmd(
                 ]
 
         from wordforge.cache import CacheStore
-        from wordforge.llm.anthropic_completer import register_if_env_key as _register_anthropic
-        from wordforge.llm.azure_openai_completer import (
-            register_if_env_key as _register_azure,
-        )
-        from wordforge.llm.bedrock_completer import register_if_env_key as _register_bedrock
         from wordforge.llm.client import LLMClient
-        from wordforge.llm.gemini_completer import register_if_env_key as _register_gemini
-        from wordforge.llm.openai_completer import register_if_env_key as _register_openai
-        from wordforge.llm.qwen_completer import register_if_env_key as _register_qwen
+        from wordforge.llm.registry import build_completers
         from wordforge.stages.registry import build_stages
 
         artifacts_store = StageArtifactStore(engine)
-        # Merge every provider whose credentials are present. Stages pick the
-        # one named in resources/default.toml `[stages.<name>].provider`; this
-        # way swapping a stage's provider is a TOML-only change.
-        completers: dict = {}
-        for register in (
-            _register_bedrock,
-            _register_anthropic,
-            _register_gemini,
-            _register_openai,
-            _register_qwen,
-            _register_azure,
-        ):
-            completers.update(register())
+        # Providers come from the [providers.*] registry in default.toml
+        # (plus the implicit `openai` = OPENAI_* env pair). Stages pick the
+        # one named in `[stages.<name>].provider`; swapping a stage's
+        # provider is a TOML-only change.
+        completers: dict = build_completers(cfg)
         llm = LLMClient(store=CacheStore(engine), completers=completers) if completers else None
         stages = build_stages(cfg, engine=engine, artifacts=artifacts_store, llm=llm)
         if stage is not None:
@@ -378,9 +363,10 @@ def review_cmd(
     import sqlalchemy as _sa
 
     from wordforge.cache import CacheStore
+    from wordforge.config import load_stage_config
     from wordforge.db.engine import make_engine
-    from wordforge.llm.bedrock_completer import register_if_env_key as _register_bedrock
     from wordforge.llm.client import LLMClient
+    from wordforge.llm.registry import build_completers
     from wordforge.reviewer.config import CFG
     from wordforge.reviewer.runner import run_review
 
@@ -404,10 +390,11 @@ def review_cmd(
         )
 
     engine = make_engine()
-    completers = _register_bedrock()
-    if not completers:
+    completers = build_completers(load_stage_config())
+    if CFG.PROVIDER not in completers:
         typer.echo(
-            "error: no Bedrock creds (set AWS_BEARER_TOKEN_BEDROCK or AWS_ACCESS_KEY_ID)",
+            f"error: provider {CFG.PROVIDER!r} has no credentials — set the env "
+            "pair named in resources/default.toml [providers.*]",
             err=True,
         )
         raise typer.Exit(2)

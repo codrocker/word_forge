@@ -98,9 +98,14 @@ export function Search() {
     <div className="mx-auto max-w-7xl px-4 py-6">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Words</h1>
-        <Link to="/audit" className="text-sm text-blue-600 hover:underline">
-          Audit Log &rarr;
-        </Link>
+        <div className="flex items-center gap-4">
+          <Link to="/experiments" className="text-sm text-blue-600 hover:underline">
+            LLM 实验 &rarr;
+          </Link>
+          <Link to="/audit" className="text-sm text-blue-600 hover:underline">
+            Audit Log &rarr;
+          </Link>
+        </div>
       </div>
 
       <div className="mb-4">

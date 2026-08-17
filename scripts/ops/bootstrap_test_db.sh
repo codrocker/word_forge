@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
 export DATABASE_URL="${TEST_DATABASE_URL:-postgresql+psycopg://wordforge:wordforge@localhost:5434/wordforge_test}"

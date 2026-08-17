@@ -1736,6 +1736,7 @@ llm = [
 web = [
     { name = "argon2-cffi" },
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "pydantic", extra = ["email"] },
     { name = "python-multipart" },
     { name = "slowapi" },
@@ -1753,6 +1754,7 @@ requires-dist = [
     { name = "google-auth", specifier = ">=2.0" },
     { name = "google-genai", specifier = ">=1.0" },
     { name = "httpx", specifier = ">=0.27" },
+    { name = "httpx", marker = "extra == 'web'", specifier = ">=0.27" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10" },
     { name = "openai", specifier = ">=1.50" },
     { name = "oss2", specifier = ">=2.18" },

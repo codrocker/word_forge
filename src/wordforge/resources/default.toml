@@ -14,6 +14,31 @@
 # deepseek-chat；50 词验证批次（见 reviewer/config.py 同步说明）若显示分层
 # 有收益，再在 GLM（glm-4.6 / glm-4.5-air）或硅基流动（Qwen 系）上恢复双轨。
 # 下方 cost_estimate_usd 均为迁移前的旧模型数据，待 50 词批次实测后重标。
+#
+# ── providers 注册表 ────────────────────────────────────────────────────────
+# 每个 [providers.<id>] 是一个命名的 LLM 接入点：transport（completer）+
+# endpoint/key 的 env 变量名。key 永远不写进本文件。stage 用 provider 名引用；
+# 同一管线不同 stage 可以走不同供应商。加一家 = 加一块配置 + 两个 env，零代码。
+# `openai` 条目未显式定义时由 llm/registry.py 隐式合成（= OPENAI_* 全局对，
+# 保持 2026-08 迁移语义不变）。
+
+[providers.openai]
+# 默认接入点：OPENAI_BASE_URL / OPENAI_API_KEY（DeepSeek、Kimi、GLM、
+# 硅基流动、自建 relay 等 OpenAI 兼容端点均走这条）。
+completer = "openai"
+base_url_env = "OPENAI_BASE_URL"
+api_key_env = "OPENAI_API_KEY"
+
+# 再接一家的样例（取消注释并 source 对应 env 即生效）：
+# [providers.deepseek]
+# completer = "openai"
+# base_url_env = "DEEPSEEK_BASE_URL"     # e.g. https://api.deepseek.com
+# api_key_env = "DEEPSEEK_API_KEY"
+#
+# [providers.relay]
+# completer = "openai"
+# base_url_env = "RELAY_BASE_URL"        # relay_station / sub2api 网关
+# api_key_env = "RELAY_API_KEY"
 
 [stages.fetch_dict]
 parser_version = "1"

@@ -56,8 +56,13 @@ _PRICES: dict[str, tuple[float, float]] = {
     "deepseek.v3.2":                 (0.5, 2.0),
     "deepseek.r1":                   (1.0, 4.0),
     # --- DeepSeek direct API (2026-08 provider migration default) ---
-    "deepseek-chat":                 (0.28, 1.10),
-    "deepseek-reasoner":             (0.55, 2.19),
+    # V4-era list prices (2026-08-17, cross-checked against the pricing
+    # table maintained in ~/.loongport): flash is the batch-pipeline tier,
+    # pro the quality tier. chat/reasoner kept for V3.2-era naming.
+    "deepseek-v4-flash":             (0.14, 0.28),
+    "deepseek-v4-pro":               (0.435, 0.87),
+    "deepseek-chat":                 (0.14, 0.28),
+    "deepseek-reasoner":             (0.14, 0.28),
 }
 
 

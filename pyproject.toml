@@ -35,6 +35,7 @@ web = [
   "slowapi>=0.1.9",
   "python-multipart>=0.0.7",
   "pydantic[email]>=2.0",
+  "httpx>=0.27",
 ]
 
 [project.scripts]

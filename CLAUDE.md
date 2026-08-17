@@ -14,8 +14,6 @@ git 库：`git@github.com:codrocker/word_forge.git`
 
 **Schema 设计硬规矩**:凡是要新建或修改数据表、讨论字段语义、写 DDL(不限 PG/MySQL/SQLite),**必须先 `lark-doc +fetch` 对应 wiki 页**,具体入口见 `../../docs/shared/feishu-wiki-index.md`。wiki 是组织的 schema 约定事实源,实例里 `SHOW CREATE TABLE` / `pg_dump` 只是当前状态的降级兜底。信任链 `代码 > wiki > 实例 DDL` —— wiki 常常领先于实例(新增字段、warning 如"临时设置 NULL"),只看实例会让新 schema 偏离组织约定。
 
-**长文档分批写硬规矩**:单次 `Write` / `Edit` 输出 **超过 ~150 行**会触发 socket timeout / "connection closed unexpectedly"。正确做法:先 `Write` 骨架(header + 前 1-2 节),之后用 `Edit` 追加式每次加 100-150 行。适用场景:design spec / implementation plan / 长 README / 大型测试文件。不要偷懒一次写完。
-
 ## 如何访问外部资源(凭证全在 `~/.wordforge/`,chmod 600,不进 git)
 
 访问任何 prod / 外部资源前 **先看下表查对应 env 文件是否已经有**,再决定是否新建。
@@ -30,7 +28,7 @@ git 库：`git@github.com:codrocker/word_forge.git`
 | MySQL `word_forge` 库 写账号 | `~/.wordforge/mysql_writer.env` | `WORDFORGE_MYSQL_WRITER_DSN` | 账号 `wordforge_writer`, CRUD + DDL on `word_forge.*`,供 `scripts/replicate/mirror_to_mysql.py` |
 | MySQL `word_forge` 库 读账号 | `~/.wordforge/mysql_reader.env` | `WORDFORGE_MYSQL_READER_DSN` | `wordforge_reader`,`SELECT` only,供对账 / gozero |
 | OSS `sailing-words-package-words` | `~/.wordforge/oss.env` | `OSS_ENDPOINT / OSS_BUCKET / OSS_ACCESS_KEY_ID / OSS_ACCESS_KEY_SECRET` | 读写词包 JSON |
-| Bedrock / LLM 凭证 | `~/.wordforge/prod.env` 里(AWS_* / OPENAI_API_KEY 等) | 按 provider | 各 completer 读 |
+| LLM 凭证(OpenAI 兼容) | `~/.wordforge/prod.env` (`OPENAI_API_KEY` / `OPENAI_BASE_URL`;DeepSeek、Kimi、GLM、硅基流动、自建 relay 均走此协议) | 按 provider 条目 | 各 completer 读。多供应商并发见 `resources/default.toml` 的 `[providers.*]` 注册表 |
 
 密码本身不进这张表,只写 env 文件路径和变量名。新凭证 append 一个新 env 文件,不要改已有
 文件的语义;脚本里 `source ~/.wordforge/xxx.env` 然后读 env var,不要用 `--as root / sudo mysql -u root`。
@@ -40,7 +38,7 @@ git 库：`git@github.com:codrocker/word_forge.git`
 **跑脚本 / 测试的三条硬约定**:
 
 - **venv 用 uv 管理,本仓专用 `.venv/`,不要共享 `sailing_env` 等外部 venv**。首次
-  准备环境: `cd word_forge && uv sync --extra dev --extra llm`,会根据 `pyproject.toml`
+  准备环境: `cd word_forge && uv sync --extra dev --extra llm --extra web`,会根据 `pyproject.toml`
   建 `.venv/`(Python 3.12)+ 装完所有依赖 + 生成 `uv.lock`。日常加依赖用 `uv add <pkg>`
   (而不是 `pip install` —— pip 装的不会写入 lockfile,下次 `uv sync` 会被清掉)。跑命令
   两种姿势都行: `source .venv/bin/activate` 或前缀 `uv run`(例: `uv run pytest`)。理由:
@@ -49,7 +47,8 @@ git 库：`git@github.com:codrocker/word_forge.git`
 - **pytest**:执行前必须 `export DATABASE_URL='postgresql+psycopg://wordforge:wordforge@localhost:5434/wordforge_test'`
   (本地 docker test db — `wordforge-pg-test` 容器,端口 **5434**,`docker-compose.test.yml` 起)。
   注意别和 dev 的 `wordforge-pg` 搞混(那个是 5433 / `wordforge`)。`tests/conftest.py` 的 guard
-  会拒绝任何非本地 + 非 test 名的 URL,忘设会被直接 `pytest.exit()`。
+  会拒绝任何非本地 + 非 test 名的 URL,忘设会被直接 `pytest.exit()`。测试容器全机共享一份
+  (固定容器名/端口),worktree 里跑测试直接指它,不要试图再起一份。
 - **跑本仓脚本用 `-m` 模块模式**,不是 `python scripts/x/y.py`。因为 `scripts/` 下的模块互相
   import 需要把仓根加入 PYTHONPATH,只有 `-m` 才能做到。正确: `.venv/bin/python -m scripts.packaging.export_sailing_sqlite`;
   错误: `.venv/bin/python scripts/packaging/export_sailing_sqlite.py` (ModuleNotFoundError: scripts).
@@ -78,19 +77,17 @@ git 库：`git@github.com:codrocker/word_forge.git`
 
 ### LLM / 外部 API 调用
 
-- **所有外部 API 调用必须走 `CacheStore`**。直接 `boto3.client(...).converse(...)` 是 bug——
+- **所有外部 API 调用必须走 `CacheStore`**。绕过 LLMClient 直接调 SDK 是 bug——
   同 prompt 跑第二遍还花钱 = 设计缺陷。
 - **缓存 key 必须加 script-specific discriminator**(如 `input_payload={"script": "xxx", "checker": name}`),
   否则两个脚本的相似 prompt 会相互污染。
 - **新加 LLM provider 必须同步更新 pytest env-pop list**。`tests/test_cli.py` 的
   `_LLM_PROVIDER_ENV_KEYS` 枚举所有 provider env 凭证,漏一个会让"无 LLM 路径"测试被环境泄漏破坏。
-- **Gemini 2.5 Pro 强制 thinking mode**。API reject `thinking_budget=0`(Flash 可 0)。
-  Pro 的 thinking tokens 算 output 价($5/M),便宜任务用 Flash;必须 Pro 时 `max_tokens`
-  要预留 ~2048 给 thinking,否则 finish_reason=MAX_TOKENS + 空文本。
-- **google-genai SDK 选 AI Studio 还是 Vertex 是 env-implicit**:`GOOGLE_CLOUD_PROJECT` 有值时
-  自动走 Vertex(要 ADC/SA key);只想用 `api_key` 必须显式 `vertexai=False`,否则报
-  "Unknown name thinkingConfig at generation_config"(Vertex 字段名不同)。`api_version="v1"`
-  的 AI Studio endpoint 不支持 thinking_config,默认 v1beta 才支持——没特殊原因别设 api_version。
+- **content_filter 不是 error**。OpenAI 兼容端点 `finish_reason=content_filter` 是拒答不是系统错。
+  completer 软降级:返回空 text + cost=0 让 caller 跑完整批,不要 raise 崩整 run。
+- **2026-08 起全部走 OpenAI 兼容协议**(DeepSeek / Kimi / GLM / 硅基流动 / 自建 relay)。Bedrock、
+  Gemini、Qwen、Azure 的 completer 及其专有参数(thinking mode、Vertex env 隐式切换等)已随账号
+  一起失效,仅在 git 历史里可查;别再按那些叙述配置新环境。
 
 ### asyncio / 线程池 / 长跑进程
 
@@ -101,6 +98,8 @@ git 库：`git@github.com:codrocker/word_forge.git`
   被饿死,heartbeat 发不出,8 小时完成 0 个词。正解:`asyncio.Queue` + N 个 worker 协程 +
   `asyncio.Semaphore` 限流;阻塞 IO 走 `asyncio.to_thread`;显式
   `loop.set_default_executor(ThreadPoolExecutor(max_workers=...))` 控制规模。
+- **heartbeat 无缓冲输出**。`python -u` + `>> log 2>&1`,**不要**套 `tee ... | tail -N`——
+  中间 pipe 的 block buffer 会吞 heartbeat(~4KB 才 flush),看起来像死了。
 
 ### Web Admin
 
@@ -122,22 +121,12 @@ git 库：`git@github.com:codrocker/word_forge.git`
   `tests/db/` 的 migration 测试会 `downgrade base`,若 pytest 先跑 db 再跑 web,
   表全丢。该 fixture 保证 web test 前 schema 完整。不要删它或改成 function-scope。
 
-## Bedrock 从中国大陆调用
-
-- **必走代理 + 已内置 Config**。Bedrock 封中国 IP;默认 timeout 对"半死"代理无效。
-  `wordforge.llm.bedrock_completer.make_bedrock_completer` 已配好 `connect_timeout=10, read_timeout=60, retries=max_attempts=2`——不要在调用方 reimplement。
-- **content_filter 不是 error**。Bedrock `stopReason=content_filtered` / OpenAI / Gemini
-  `finish_reason=content_filter` 都是拒答不是系统错。completer 软降级:返回空 text + cost=0
-  让 caller 跑完整批,不要 raise 崩整 run。
-- **heartbeat 无缓冲输出**。`python -u` + `>> log 2>&1`,**不要**套 `tee ... | tail -N`——
-  中间 pipe 的 block buffer 会吞 heartbeat(~4KB 才 flush),看起来像死了。
-
 ## 运维脚本 (scripts/*.py) 写法守则
 
 1. **入参**:`--output` 默认 append 模式,配 `--skip-done-from`(支持多次传)读 jsonl union
    到 skip 集合,resume 零重复。
 2. **LLM 调用**走 `LLMClient(store=CacheStore(engine), completers={...})`;定制 timeout/retry
-   时自己写一个 completer 注入,不要直接 boto3。
+   时自己写一个 completer 注入,不要绕过缓存直接调 SDK。
 3. **日志**:进度到 stdout,重大错误到 stderr,两者都要 `flush=True`。
 
 ## 数据模型地雷
@@ -157,9 +146,10 @@ git 库：`git@github.com:codrocker/word_forge.git`
 docker exec wordforge-pg psql -U wordforge -d wordforge -c \
   "SELECT kind, COUNT(*) FROM pipeline.external_call_cache GROUP BY kind ORDER BY 2 DESC LIMIT 10;"
 
-# 代理健康
-curl -s --max-time 8 --proxy socks5h://127.0.0.1:1082 \
-  https://bedrock-runtime.us-east-1.amazonaws.com/ -o /dev/null -w "%{http_code} %{time_total}\n"
+# LLM 端点健康(OpenAI 兼容;先 source ~/.wordforge/prod.env)
+curl -s --max-time 8 "$OPENAI_BASE_URL/models" \
+  -H "Authorization: Bearer $OPENAI_API_KEY" \
+  -o /dev/null -w "%{http_code} %{time_total}\n"
 
 # 卡住的长进程看它挂在哪
 lsof -p <pid> | grep -E "TCP|IPv" | head

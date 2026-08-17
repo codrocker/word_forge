@@ -27,6 +27,8 @@ _VALID_STAGE_FIELDS = frozenset(
     {"parser_version", "prompt_version", "model", "cost_estimate_usd", "provider"}
 )
 
+_VALID_PROVIDER_FIELDS = frozenset({"completer", "base_url_env", "api_key_env"})
+
 
 @dataclass(frozen=True)
 class StageConfig:
@@ -38,8 +40,23 @@ class StageConfig:
 
 
 @dataclass(frozen=True)
+class ProviderConfig:
+    """One named LLM access point ([providers.<id>] in default.toml).
+
+    `completer` names the transport ("openai" = any OpenAI-compatible
+    endpoint, "anthropic" = Anthropic-compatible). Credentials resolve from
+    the env vars named here — keys never live in the config file.
+    """
+
+    completer: str
+    base_url_env: str | None = None
+    api_key_env: str | None = None
+
+
+@dataclass(frozen=True)
 class WordforgeConfig:
     stages: dict[str, StageConfig] = field(default_factory=dict)
+    providers: dict[str, ProviderConfig] = field(default_factory=dict)
     default_budget_cap_usd: float | None = None
 
 
@@ -92,6 +109,29 @@ def load_stage_config(*, path: Path | None = None) -> WordforgeConfig:
             provider=(str(sub["provider"]) if "provider" in sub else None),
         )
 
+    providers_raw = raw.get("providers", {})
+    if not isinstance(providers_raw, dict):
+        raise ValueError("'providers' must be a table")
+    providers: dict[str, ProviderConfig] = {}
+    for pid, sub in providers_raw.items():
+        if not isinstance(sub, dict):
+            raise ValueError(f"provider {pid!r} must be a table, got {type(sub).__name__}")
+        extra = set(sub.keys()) - _VALID_PROVIDER_FIELDS
+        if extra:
+            raise ValueError(
+                f"provider {pid!r} has unknown field(s): {sorted(extra)}; "
+                f"valid: {sorted(_VALID_PROVIDER_FIELDS)}"
+            )
+        if "completer" not in sub:
+            raise ValueError(f"provider {pid!r} missing required 'completer'")
+        providers[str(pid)] = ProviderConfig(
+            completer=str(sub["completer"]),
+            base_url_env=(str(sub["base_url_env"]) if "base_url_env" in sub else None),
+            api_key_env=(str(sub["api_key_env"]) if "api_key_env" in sub else None),
+        )
+
     cap_raw = raw.get("default_budget_cap_usd")
     cap = float(cap_raw) if cap_raw is not None else None
-    return WordforgeConfig(stages=stages, default_budget_cap_usd=cap)
+    return WordforgeConfig(
+        stages=stages, providers=providers, default_budget_cap_usd=cap
+    )
