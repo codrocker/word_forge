@@ -56,9 +56,10 @@ export type ExperimentRun = {
 };
 
 export type CreateRunPayload = {
-  provider: string;
-  model: string;
-  stage: string;
+  agent_id?: number;
+  provider?: string;
+  model?: string;
+  stage?: string;
   prompt_override?: string | null;
   word_count: number;
   seed: number;

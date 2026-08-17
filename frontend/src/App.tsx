@@ -7,6 +7,7 @@ import { Search } from '@/pages/Search';
 import { WordDetail } from '@/pages/WordDetail';
 import { Audit } from '@/pages/Audit';
 import { Experiments } from '@/pages/Experiments';
+import { ConfigCenter } from '@/pages/ConfigCenter';
 
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
             <Route path="/words/:id" element={<WordDetail />} />
             <Route path="/audit" element={<Audit />} />
             <Route path="/experiments" element={<Experiments />} />
+            <Route path="/config-center" element={<ConfigCenter />} />
           </Route>
           <Route path="*" element={<NotFoundPage />} />
         </Routes>

@@ -6,6 +6,7 @@ import {
   useRunsQuery,
   useCreateRunMutation,
 } from '@/api/experiments';
+import { useAgentsQuery } from '@/api/configCenter';
 import { ApiError } from '@/api/client';
 
 const STATUS_STYLE: Record<string, string> = {
@@ -18,7 +19,9 @@ export function Experiments() {
   const providersQ = useProvidersQuery();
   const runsQ = useRunsQuery();
   const createRun = useCreateRunMutation();
+  const agentsQ = useAgentsQuery();
 
+  const [agentId, setAgentId] = useState('');
   const [provider, setProvider] = useState('');
   const [model, setModel] = useState('');
   const [stage, setStage] = useState('paraphrase');
@@ -27,12 +30,24 @@ export function Experiments() {
   const [promptOverride, setPromptOverride] = useState('');
 
   const providerId = provider || providersQ.data?.providers[0]?.id || null;
-  const modelsQ = useModelsQuery(providerId);
+  const modelsQ = useModelsQuery(agentId ? null : providerId);
 
   const stages = providersQ.data?.stages ?? [];
   const runs = runsQ.data?.items ?? [];
+  const agentMode = agentId !== '';
+  const selectedAgent = (agentsQ.data ?? []).find((a) => String(a.id) === agentId);
+  const agentRecipe = selectedAgent?.versions?.[0];
 
   const submit = () => {
+    if (agentMode) {
+      createRun.mutate({
+        agent_id: Number(agentId),
+        prompt_override: promptOverride.trim() || null,
+        word_count: wordCount,
+        seed,
+      });
+      return;
+    }
     if (!providerId || !model.trim()) return;
     createRun.mutate({
       provider: providerId,
@@ -58,6 +73,9 @@ export function Experiments() {
         <Link to="/" className="text-sm text-blue-600 hover:underline">
           ← 词库
         </Link>
+        <Link to="/config-center" className="text-sm text-blue-600 hover:underline">
+          配置中心
+        </Link>
         <Link to="/audit" className="text-sm text-blue-600 hover:underline">
           审计日志
         </Link>
@@ -66,6 +84,33 @@ export function Experiments() {
       <section className="mb-6 rounded border p-4">
         <h2 className="mb-3 text-sm font-semibold text-gray-700">新建实验</h2>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
+          <label className="text-sm md:col-span-2">
+            <span className="mb-1 block text-gray-600">
+              Agent（选它则用配置中心的版本化组合；留空走下面的点选模式）
+            </span>
+            <select
+              className="w-full rounded border px-2 py-1"
+              value={agentId}
+              onChange={(e) => setAgentId(e.target.value)}
+            >
+              <option value="">— 点选模式 —</option>
+              {(agentsQ.data ?? []).map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}（v{a.current_version}）
+                </option>
+              ))}
+            </select>
+          </label>
+          {agentMode && agentRecipe ? (
+            <div className="text-sm md:col-span-3">
+              <span className="mb-1 block text-gray-600">Agent 配方（来自配置中心，随版本固定）</span>
+              <p className="rounded bg-gray-50 px-2 py-1 font-mono text-xs text-gray-700">
+                {agentRecipe.provider_config_name} v{agentRecipe.provider_config_version} ·{' '}
+                {agentRecipe.model} · {agentRecipe.prompt_name} v{agentRecipe.prompt_version}
+              </p>
+            </div>
+          ) : (
+            <>
           <label className="text-sm">
             <span className="mb-1 block text-gray-600">供应商</span>
             <select
@@ -129,6 +174,8 @@ export function Experiments() {
               ))}
             </select>
           </label>
+            </>
+          )}
           <label className="text-sm">
             <span className="mb-1 block text-gray-600">词数（1-200）</span>
             <input
@@ -165,7 +212,10 @@ export function Experiments() {
           <button
             type="button"
             className="rounded bg-blue-600 px-4 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
-            disabled={createRun.isPending || !providerId || !model.trim()}
+            disabled={
+              createRun.isPending ||
+              (agentMode ? !agentId : !providerId || !model.trim())
+            }
             onClick={submit}
           >
             {createRun.isPending ? '提交中…' : '运行实验'}

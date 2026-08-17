@@ -62,17 +62,31 @@ def create_run(
     editor: dict = Depends(current_editor),
     engine: Engine = Depends(get_engine),
 ):
+    from wordforge.web.services import agent_run_service
+
     try:
-        run_id = experiment_service.start_run(
-            engine,
-            editor_id=editor["id"],
-            provider=req.provider,
-            model=req.model,
-            stage=req.stage,
-            prompt_override=req.prompt_override,
-            word_count=req.word_count,
-            seed=req.seed,
-        )
+        if req.agent_id is not None:
+            run_id = agent_run_service.start_agent_run(
+                engine,
+                editor_id=editor["id"],
+                agent_id=req.agent_id,
+                prompt_override=req.prompt_override,
+                word_count=req.word_count,
+                seed=req.seed,
+            )
+        else:
+            if not req.provider or not req.model or not req.stage:
+                raise ExperimentError("provider, model and stage are required without agent_id")
+            run_id = experiment_service.start_run(
+                engine,
+                editor_id=editor["id"],
+                provider=req.provider,
+                model=req.model,
+                stage=req.stage,
+                prompt_override=req.prompt_override,
+                word_count=req.word_count,
+                seed=req.seed,
+            )
     except ExperimentError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     return envelope_ok({"run_id": run_id})
@@ -85,7 +99,9 @@ def runs(limit: int = 50, engine: Engine = Depends(get_engine)):
 
 @router.get("/runs/{run_id}")
 def run_detail(run_id: int, engine: Engine = Depends(get_engine)):
-    row = experiment_service.get_run(engine, run_id)
+    from wordforge.web.services import agent_run_service
+
+    row = agent_run_service.get_run_detail(engine, run_id)
     if row is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
