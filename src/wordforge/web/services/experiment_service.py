@@ -41,10 +41,15 @@ def _validate_paraphrase(parsed: Any) -> bool:
 
 # Stage-specific experiment specs. Values mirror the real stage's prompt
 # contract so experiment results are representative of pipeline behavior.
+# max_tokens is deliberately generous (8k vs the pipeline's 2k): reasoning-
+# tier models (deepseek-v4 etc.) spend the budget on hidden thinking and
+# return finish_reason=length with EMPTY content when starved — observed
+# live on 2026-08-17 E2E: 2048 tokens failed 3/5 words. The experiment's
+# job is to measure output quality, not reproduce starvation.
 STAGE_SPECS: dict[str, dict[str, Any]] = {
     "paraphrase": {
         "template_vars": ("word", "dict_summary"),
-        "request_params": {"temperature": 0, "max_tokens": 2048},
+        "request_params": {"temperature": 0, "max_tokens": 8192},
         "validate": _validate_paraphrase,
     },
 }
