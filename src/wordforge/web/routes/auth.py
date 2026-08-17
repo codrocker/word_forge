@@ -18,6 +18,7 @@ from wordforge.web.security import (
     cookie_secure,
     create_session,
     revoke_session,
+    session_digest,
 )
 
 router = APIRouter(prefix="/api/v1/auth")
@@ -77,7 +78,8 @@ def logout(
     engine: Engine = Depends(get_engine),
 ):
     raw = request.cookies.get(COOKIE_NAME)
-    if raw:
+    # Boundary validation: only well-formed tokens reach the DB layer.
+    if raw and session_digest(raw) is not None:
         with engine.begin() as conn:
             revoke_session(conn, raw)
     response.delete_cookie(COOKIE_NAME, path="/api")

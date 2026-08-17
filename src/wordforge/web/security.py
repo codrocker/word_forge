@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import os
+import re
 
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
@@ -15,6 +16,23 @@ from wordforge.web.auth import generate_session_token, hash_session_token
 
 SESSION_TTL = _dt.timedelta(days=7)
 COOKIE_NAME = "session"
+
+# generate_session_token() emits secrets.token_urlsafe(32) ≈ 43 chars of
+# [A-Za-z0-9_-]. Loose bounds reject malformed cookies before any crypto/DB
+# work; the fullmatch guard also serves as the input sanitizer boundary for
+# taint analysis.
+_TOKEN_RE = re.compile(r"[A-Za-z0-9_-]{20,128}")
+
+
+def session_digest(raw_token: str | None) -> str | None:
+    """Validate cookie shape at the trust boundary, then hash it.
+
+    Returns None for missing/malformed tokens (early 401 — no DB roundtrip)
+    and the sha256 digest otherwise. Callers pass only the digest onward.
+    """
+    if not raw_token or not _TOKEN_RE.fullmatch(raw_token):
+        return None
+    return hash_session_token(raw_token)
 
 
 def cookie_secure() -> bool:

@@ -7,7 +7,7 @@ from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.engine import Engine
 
 from wordforge.db.engine import make_engine
-from wordforge.web.security import COOKIE_NAME, find_active_editor
+from wordforge.web.security import COOKIE_NAME, find_active_editor, session_digest
 
 
 @lru_cache(maxsize=1)
@@ -26,7 +26,9 @@ def dispose_engine() -> None:
 def current_editor(request: Request, engine: Engine = Depends(get_engine)) -> dict:
     """Require a valid session cookie; raise 401 otherwise."""
     raw = request.cookies.get(COOKIE_NAME)
-    if not raw:
+    # Boundary validation: reject missing/malformed tokens before any
+    # crypto or DB work (session_digest fullmatch + hash).
+    if session_digest(raw) is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="not logged in")
     with engine.connect() as conn:
         editor = find_active_editor(conn, raw)
