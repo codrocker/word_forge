@@ -119,6 +119,50 @@ uv run wordforge dlq replay --word-id 42
 # 重置 pipeline.words.status='new'; 下次 run 会重试
 ```
 
+## Web Admin
+
+内部词条审阅 / 编辑后台。前后端分离,后端 FastAPI,前端 React + Vite。
+
+### Dev 模式(两个终端)
+
+```bash
+# 终端 1 — 后端 (hot-reload)
+source ~/.wordforge/prod.env
+uv run wordforge web --reload
+# → http://localhost:8000 (API + health)
+
+# 终端 2 — 前端 (Vite dev server, proxy /api → 8000)
+cd frontend && npm run dev
+# → http://localhost:5173
+```
+
+### Prod 模式
+
+```bash
+# 1. 前端 build
+cd frontend && npm ci && npm run build   # → frontend/dist/
+
+# 2. 后端 serve (mount dist/ as SPA)
+source ~/.wordforge/prod.env
+docker compose up -d wordforge-web
+# 或直接:
+uv run wordforge web
+# → http://localhost:8000/ (SPA + API 同端口)
+```
+
+### 初始化编辑者账号
+
+```bash
+uv run wordforge editors create --email admin@example.com --display-name "Admin"
+# 首次登录使用邮箱,系统发送一次性登录链接 (MVP: cookie session)
+```
+
+### 环境变量
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `WORDFORGE_WEB_COOKIE_SECURE` | `true` | 本地开发设 `false` 以允许 HTTP cookie |
+
 ## 换 Anthropic direct API (非 bedrock) 的路径
 
 ```bash

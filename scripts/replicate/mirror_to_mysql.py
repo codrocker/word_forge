@@ -27,7 +27,7 @@ from scripts.replicate.field_mapping import (
 
 TABLES = ["word", "meaning", "sentence", "mnemonic", "phrase"]
 
-_WORD_COLS = "word_id, type, form, phonetic_us, audio_us, phonetic_uk, audio_uk, source"
+_WORD_COLS = "word_id, type, form, phonetic_us, audio_us, phonetic_uk, audio_uk, source, status"
 _MEANING_COLS = (
     "meaning_id, word_id, pos, pos_sub, equivalents, synonyms, antonyms, "
     "cn_paraphrase, en_paraphrase, source"

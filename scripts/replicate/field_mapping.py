@@ -47,7 +47,7 @@ def row_to_mysql_word(
         "morpheme_derivatives": None,
         "family": None,
         "source": pg.get("source"),
-        "status": 1,
+        "status": pg["status"],
     }
 
 

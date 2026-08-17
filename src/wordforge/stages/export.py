@@ -167,125 +167,9 @@ class ExportStage:
             return app_word_id, case
 
     def _upsert_serving_word_payload(self, conn: Connection, word_id: int) -> None:
-        """Build aggregated JSONB payload from domain.* + domain.package_word
-        and upsert into serving.word_payload. Runs inside the export txn so
-        domain.* and serving.* cannot drift.
+        from wordforge.db.serving import rebuild_word_payload
 
-        Implementation notes:
-        - Read straight from domain.* rather than piecing upstream artifacts
-          together — any preceding preflight/Case-C branch may have stored
-          human-authored content, and serving must reflect whatever is
-          actually in the canonical tables.
-        - domain.package_word has no FK to domain.words, so the LEFT JOIN
-          handles the "package references a word we don't have yet" case
-          (see mirror script's post-flight warning).
-        """
-        row = conn.execute(
-            sa.text(
-                "SELECT form, type, phonetic_us, phonetic_uk, audio_us, audio_uk "
-                "FROM domain.words WHERE word_id = :w"
-            ),
-            {"w": word_id},
-        ).first()
-        if row is None:
-            return  # word not in domain yet (Case C variant); skip
-        form, type_, ph_us, ph_uk, a_us, a_uk = row
-
-        meanings = conn.execute(
-            sa.text(
-                "SELECT meaning_id, pos, pos_sub, cn_paraphrase, en_paraphrase, "
-                "equivalents, synonyms, antonyms "
-                "FROM domain.meanings WHERE word_id = :w ORDER BY meaning_id"
-            ),
-            {"w": word_id},
-        ).all()
-        meaning_blocks = []
-        for m in meanings:
-            sentences = conn.execute(
-                sa.text(
-                    "SELECT sentence_id, form AS en, translation AS cn "
-                    "FROM domain.sentences WHERE meaning_id = :mid ORDER BY sentence_id"
-                ),
-                {"mid": m[0]},
-            ).all()
-            meaning_blocks.append({
-                "meaning_id": m[0], "pos": m[1], "pos_sub": m[2],
-                "cn": m[3], "en": m[4],
-                "equivalents": m[5], "synonyms": m[6], "antonyms": m[7],
-                "sentences": [
-                    {"sentence_id": s[0], "en": s[1], "cn": s[2]} for s in sentences
-                ],
-            })
-
-        mnemonic_rows = conn.execute(
-            sa.text(
-                "SELECT content, type FROM domain.mnemonics "
-                "WHERE word_id = :w ORDER BY mnemonic_id LIMIT 1"
-            ),
-            {"w": word_id},
-        ).first()
-        mnemonic = (
-            {"content": mnemonic_rows[0], "type": mnemonic_rows[1]}
-            if mnemonic_rows else None
-        )
-
-        phrase_rows = conn.execute(
-            sa.text(
-                "SELECT phrase_id, form, meaning "
-                "FROM domain.phrases WHERE owner_word_id = :w ORDER BY phrase_id"
-            ),
-            {"w": word_id},
-        ).all()
-        phrases = [
-            {"phrase_id": p[0], "en": p[1], "meaning": p[2]} for p in phrase_rows
-        ]
-
-        package_rows = conn.execute(
-            sa.text(
-                "SELECT package_id, unit_id, sort_order, importance "
-                "FROM domain.package_word WHERE word_id = :w "
-                "ORDER BY package_id, sort_order"
-            ),
-            {"w": word_id},
-        ).all()
-        packages = [
-            {
-                "package_id": p[0], "unit_id": p[1],
-                "sort_order": float(p[2]),
-                "importance": p[3],
-            } for p in package_rows
-        ]
-
-        payload = {
-            "form": form,
-            "type": type_,
-            "phonetic": {
-                "us": ph_us, "uk": ph_uk,
-                "audio_us": a_us, "audio_uk": a_uk,
-            },
-            "meanings": meaning_blocks,
-            "mnemonic": mnemonic,
-            "phrases": phrases,
-            "packages": packages,
-        }
-
-        conn.execute(
-            sa.text(
-                "INSERT INTO serving.word_payload "
-                "(word_id, form, type, payload, payload_schema_version, updated_at) "
-                "VALUES (:wid, :form, :type, CAST(:payload AS jsonb), 1, now()) "
-                "ON CONFLICT (word_id) DO UPDATE SET "
-                "  form = EXCLUDED.form, "
-                "  type = EXCLUDED.type, "
-                "  payload = EXCLUDED.payload, "
-                "  payload_schema_version = EXCLUDED.payload_schema_version, "
-                "  updated_at = now()"
-            ),
-            {
-                "wid": word_id, "form": form, "type": type_,
-                "payload": json.dumps(payload, ensure_ascii=False),
-            },
-        )
+        rebuild_word_payload(conn, word_id)
 
     def _preflight_same_source(
         self, conn: Connection, word_id: int, parent_source: str, case: str
@@ -334,12 +218,14 @@ class ExportStage:
             INSERT INTO domain.words (
               type, form, phonetic_us, phonetic_uk, audio_us, audio_uk,
               structure, plural, past_tense, past_participle, third_person,
-              present_participle, comparative, superlative, derivatives, source
+              present_participle, comparative, superlative, derivatives, source,
+              status
             ) VALUES (
               :type, :form, :phonetic_us, :phonetic_uk, :audio_us, :audio_uk,
               CAST(:structure AS jsonb), :plural, :past_tense, :past_participle,
               :third_person, :present_participle, :comparative, :superlative,
-              CAST(:derivatives AS jsonb), :source
+              CAST(:derivatives AS jsonb), :source,
+              1
             )
             ON CONFLICT (form, type) DO UPDATE SET
               phonetic_us = EXCLUDED.phonetic_us,

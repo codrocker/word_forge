@@ -16,5 +16,16 @@ services:
       timeout: 3s
       retries: 10
 
+  wordforge-web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    environment:
+      DATABASE_URL: "${DATABASE_URL}"
+      WORDFORGE_WEB_COOKIE_SECURE: "false"
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
 volumes:
   wordforge_pg_data:
