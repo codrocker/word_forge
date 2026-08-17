@@ -24,8 +24,19 @@ from wordforge.llm.pricing import compute_cost
 _log = logging.getLogger(__name__)
 
 
-def make_openai_completer():
+def make_openai_completer(
+    *,
+    api_key: str | None = None,
+    base_url: str | None = None,
+    timeout: float | None = None,
+    retries: int | None = None,
+):
     """Create a completer backed by the openai SDK (Chat Completions API).
+
+    Args fall back to the OPENAI_* env vars when omitted, so the implicit
+    `openai` registry entry behaves exactly like the pre-registry global
+    env pair. Explicit args serve named [providers.*] entries that point
+    at a different OpenAI-compatible endpoint.
 
     Lazy import so CI without the SDK isn't forced to install it.
     """
@@ -37,15 +48,19 @@ def make_openai_completer():
             "`pip install wordforge[openai]`"
         ) from e
 
-    api_key = os.environ.get("OPENAI_API_KEY")
+    api_key = api_key or os.environ.get("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY env var not set")
 
     client = OpenAI(
         api_key=api_key,
-        base_url=os.environ.get("OPENAI_BASE_URL") or None,
-        timeout=float(os.environ.get("WORDFORGE_OPENAI_TIMEOUT", "60")),
-        max_retries=int(os.environ.get("WORDFORGE_OPENAI_RETRIES", "2")),
+        base_url=base_url or os.environ.get("OPENAI_BASE_URL") or None,
+        timeout=timeout if timeout is not None else float(
+            os.environ.get("WORDFORGE_OPENAI_TIMEOUT", "60")
+        ),
+        max_retries=retries if retries is not None else int(
+            os.environ.get("WORDFORGE_OPENAI_RETRIES", "2")
+        ),
     )
 
     def _completer(*, model: str, prompt: str, **params: Any) -> LLMCompletion:

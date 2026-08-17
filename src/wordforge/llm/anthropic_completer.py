@@ -8,11 +8,14 @@ from typing import Any
 from wordforge.llm.client import LLMCompletion
 
 
-def make_anthropic_completer():
+def make_anthropic_completer(*, api_key: str | None = None):
     """Create a completer backed by the anthropic SDK.
 
     Lazy import — only load the SDK when an env key is present and this
     factory is actually called. CI tests using stub completers never touch it.
+
+    `api_key` serves named [providers.*] entries; omitted it falls back to
+    ANTHROPIC_API_KEY (the pre-registry behavior).
     """
     try:
         import anthropic  # type: ignore[import-not-found]
@@ -21,7 +24,7 @@ def make_anthropic_completer():
             "anthropic SDK not installed; `pip install anthropic` to use provider"
         ) from e
 
-    client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from env
+    client = anthropic.Anthropic(api_key=api_key) if api_key else anthropic.Anthropic()
 
     def _completer(*, model: str, prompt: str, **params: Any) -> LLMCompletion:
         resp = client.messages.create(
