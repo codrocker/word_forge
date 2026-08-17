@@ -14,6 +14,7 @@ from wordforge.web.errors import envelope_err, register_exception_handlers
 from wordforge.web.middleware import RequestIDMiddleware
 from wordforge.web.routes.audit import router as audit_router
 from wordforge.web.routes.auth import limiter, router as auth_router
+from wordforge.web.routes.config_center import router as config_center_router
 from wordforge.web.routes.experiments import router as experiments_router
 from wordforge.web.routes.health import router as health_router
 from wordforge.web.routes.words import router as words_router
@@ -39,6 +40,7 @@ def create_app() -> FastAPI:
     app.include_router(words_router)
     app.include_router(audit_router)
     app.include_router(experiments_router)
+    app.include_router(config_center_router)
     # Static SPA — must be last so API routes take precedence
     dist_dir = Path(__file__).resolve().parent.parent.parent.parent / "frontend" / "dist"
     if dist_dir.is_dir() and (dist_dir / "index.html").exists():

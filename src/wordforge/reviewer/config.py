@@ -22,8 +22,12 @@ class ReviewConfig:
     # Fixer tier (was claude-opus-4-7 via bedrock). If the 50-word
     # validation shows weak fixes, try deepseek-reasoner or kimi-k2 here.
     OPUS_MODEL: str = "deepseek-chat"
-    HAIKU_MAX_TOKENS: int = 400
-    OPUS_MAX_TOKENS: int = 2500
+    # Token budgets are caps, not targets — cost accrues on actual usage.
+    # Sized for reasoning tiers (deepseek-v4 etc.): thinking tokens count
+    # toward the limit, and the pre-2026-08 values (400/2500) starved them
+    # into finish_reason=length with empty content.
+    HAIKU_MAX_TOKENS: int = 4000
+    OPUS_MAX_TOKENS: int = 12000
     # Input clipping — safety net for pathological polysemous words
     # (see rec["blob_truncated"] in jsonl if this fires).
     BLOB_CHAR_LIMIT: int = 5500

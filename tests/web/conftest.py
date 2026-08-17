@@ -47,3 +47,7 @@ def _reset_web_state_between_tests():
 # the repo (Mimosa security gate) while every web test module agrees on
 # one value. Regenerated per pytest session; harmless if it changes.
 TEST_PASSWORD = "pw-" + secrets.token_hex(6)
+
+# Shared web-test fixture: fetch_dict-seeded sample words
+# (defined in test_experiments, re-exported so other modules can use it)
+from tests.web.test_experiments import seeded_words as seeded_words  # noqa: E402,F401

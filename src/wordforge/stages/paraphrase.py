@@ -213,7 +213,7 @@ async def _rerank_meanings(
                 provider=provider,
                 model=model,
                 rendered_prompt=rendered,
-                request_params={"temperature": 0, "max_tokens": 512},
+                request_params={"temperature": 0, "max_tokens": 4096},
                 input_payload={"word": word, "rerank": True},
             ),
         )
@@ -414,7 +414,7 @@ class ParaphraseStage:
                 provider=self.config.provider or "anthropic",
                 model=self.config.model or "claude-opus-4",
                 rendered_prompt=rendered_prompt,
-                request_params={"temperature": 0, "max_tokens": 2048},
+                request_params={"temperature": 0, "max_tokens": 8192},
                 input_payload={"word": word, "summary_hash": str(hash(dict_summary))},
             ),
         )
