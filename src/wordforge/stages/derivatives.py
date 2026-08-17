@@ -83,7 +83,7 @@ class DerivativesStage:
                 provider=self.config.provider or "anthropic",
                 model=self.config.model or "claude-opus-4",
                 rendered_prompt=rendered_prompt,
-                request_params={"temperature": 0, "max_tokens": 2048},
+                request_params={"temperature": 0, "max_tokens": 8192},
                 input_payload={"word": word},
             ),
         )
