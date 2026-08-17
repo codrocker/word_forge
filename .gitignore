@@ -26,3 +26,4 @@ build/
 /scripts/replicate/init_database.sql
 /replicate_run.jsonl
 /drift_report.jsonl
+.mimosa/

@@ -45,7 +45,7 @@ def llm_call_sync(
     if "claude-opus-4-7" not in model:
         request_params["temperature"] = 0
     completion = llm.complete(
-        provider="bedrock",
+        provider=CFG.PROVIDER,
         model=model,
         rendered_prompt=prompt,
         request_params=request_params,

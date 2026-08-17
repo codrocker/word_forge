@@ -55,6 +55,9 @@ _PRICES: dict[str, tuple[float, float]] = {
     # --- DeepSeek via Bedrock ---
     "deepseek.v3.2":                 (0.5, 2.0),
     "deepseek.r1":                   (1.0, 4.0),
+    # --- DeepSeek direct API (2026-08 provider migration default) ---
+    "deepseek-chat":                 (0.28, 1.10),
+    "deepseek-reasoner":             (0.55, 2.19),
 }
 
 
