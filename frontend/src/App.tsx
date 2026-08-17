@@ -6,6 +6,7 @@ import { NotFoundPage } from '@/pages/NotFound';
 import { Search } from '@/pages/Search';
 import { WordDetail } from '@/pages/WordDetail';
 import { Audit } from '@/pages/Audit';
+import { Experiments } from '@/pages/Experiments';
 
 export default function App() {
   return (
@@ -17,6 +18,7 @@ export default function App() {
             <Route path="/" element={<Search />} />
             <Route path="/words/:id" element={<WordDetail />} />
             <Route path="/audit" element={<Audit />} />
+            <Route path="/experiments" element={<Experiments />} />
           </Route>
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
