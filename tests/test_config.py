@@ -51,11 +51,12 @@ def test_stage_config_has_required_fields():
     assert paraphrase.parser_version == "1"
     assert paraphrase.prompt_version == "v1"
     # Lock the shape, not the exact model — default.toml upgrades the shipped
-    # model over time (sonnet-4 → opus-4-7 as of 2026-04-30). Test should
-    # verify it's a bedrock-formatted anthropic ID, not an empty string.
+    # model over time (claude/bedrock until 2026-08, openai-compatible after
+    # the provider migration). Test should verify it's a usable model id,
+    # not an empty string.
     assert paraphrase.model is not None
-    assert paraphrase.model.startswith("us.anthropic.claude-")
-    assert paraphrase.provider == "bedrock"
+    assert len(paraphrase.model) > 0
+    assert paraphrase.provider == "openai"
     assert paraphrase.cost_estimate_usd > 0
 
 

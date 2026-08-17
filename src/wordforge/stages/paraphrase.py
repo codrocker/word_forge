@@ -201,10 +201,8 @@ async def _rerank_meanings(
 
     import logging
 
-    provider = (rerank_cfg.provider if rerank_cfg else None) or "bedrock"
-    model = (rerank_cfg.model if rerank_cfg else None) or (
-        "us.anthropic.claude-haiku-4-5-20251001-v1:0"
-    )
+    provider = (rerank_cfg.provider if rerank_cfg else None) or "openai"
+    model = (rerank_cfg.model if rerank_cfg else None) or "deepseek-chat"
 
     loop = asyncio.get_running_loop()
     t0 = time.perf_counter()

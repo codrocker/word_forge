@@ -12,8 +12,16 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class ReviewConfig:
-    HAIKU_MODEL: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
-    OPUS_MODEL: str = "us.anthropic.claude-opus-4-7"
+    # LLM provider since the 2026-08 migration: all Bedrock/Gemini/OpenAI
+    # accounts died; the openai completer points at any OpenAI-compatible
+    # endpoint via OPENAI_BASE_URL (DeepSeek / Kimi / GLM / SiliconFlow).
+    # Swap models here when the provider changes — config-only, no code.
+    PROVIDER: str = "openai"
+    # Checker tier (was claude-haiku-4-5 via bedrock).
+    HAIKU_MODEL: str = "deepseek-chat"
+    # Fixer tier (was claude-opus-4-7 via bedrock). If the 50-word
+    # validation shows weak fixes, try deepseek-reasoner or kimi-k2 here.
+    OPUS_MODEL: str = "deepseek-chat"
     HAIKU_MAX_TOKENS: int = 400
     OPUS_MAX_TOKENS: int = 2500
     # Input clipping — safety net for pathological polysemous words

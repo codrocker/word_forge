@@ -5,6 +5,15 @@
 # `parser_version` MUST be bumped by hand when parser / client / post-
 # processing semantics change (see spec §6). Changes here invalidate
 # that stage's fingerprint → re-run (cache still hits to save API cost).
+#
+# ── 2026-08-17 provider migration ─────────────────────────────────────────
+# Bedrock / Gemini / OpenAI(直连) / DashScope-Qwen 账号全部失效。所有 stage 迁移
+# 到 openai completer + OPENAI_BASE_URL（OpenAI 兼容端点）。默认按 DeepSeek 命名；
+# 换供应商（Kimi / GLM / 硅基流动）时只改这里的 model 名，不动代码。
+# DeepSeek 目前只有 chat/reasoner 两档，原"质量档/便宜档"双轨暂时并轨为
+# deepseek-chat；50 词验证批次（见 reviewer/config.py 同步说明）若显示分层
+# 有收益，再在 GLM（glm-4.6 / glm-4.5-air）或硅基流动（Qwen 系）上恢复双轨。
+# 下方 cost_estimate_usd 均为迁移前的旧模型数据，待 50 词批次实测后重标。
 
 [stages.fetch_dict]
 parser_version = "1"
@@ -13,28 +22,24 @@ cost_estimate_usd = 0.0   # dict scrape, no LLM
 [stages.paraphrase]
 parser_version = "1"
 prompt_version = "v1"
-provider = "bedrock"
+provider = "openai"
 # Quality-critical — ~83% of momo words shortcut this stage via
-# WORDFORGE_MOMO_REF_FILE (0 LLM cost); the remaining 17% was opus-4-7
-# (~$0.049/word, 122k = $6,039 full-batch). Downgraded to sonnet-4-6
-# 2026-05-01 after codex + gemini converged: quality 2× weight doesn't
-# justify opus's 5× cost over sonnet when the learner-facing delta is
-# marginal. Full-batch drops to ~$1,208 (-$4,831).
-model = "us.anthropic.claude-sonnet-4-6"
-cost_estimate_usd = 0.0014   # sonnet-4-6 in $3/M, out $15/M; shortcut amortizes
+# WORDFORGE_MOMO_REF_FILE (0 LLM cost); the remaining 17% needs the
+# strongest general tier. Was sonnet-4-6 via bedrock until 2026-08.
+model = "deepseek-chat"
+cost_estimate_usd = 0.0002   # 旧值 0.0014 (sonnet)，按 ~10× 差价预估，待实测
 
 [stages.paraphrase_rerank]
 # Not a real stage (build_stages skips it); config-only "sub-stage" so
 # _rerank_meanings() can swap its model without code edits. Task is
 # pattern-matching (reorder existing meanings by frequency), so quality =
-# cost weight. Switched 2026-05-01 haiku-4-5 → gemini-2.5-flash: the
-# latter costs ~15× less ($26 vs $403 full-batch) for equivalent output
-# on pure reorder tasks. Short-circuits when meanings <= 3 keeps volume bounded.
+# cost weight. Was gemini-2.5-flash until 2026-08.
+# Short-circuits when meanings <= 3 keeps volume bounded.
 parser_version = "1"
 prompt_version = "v1"
-provider = "gemini"
-model = "gemini-2.5-flash"
-cost_estimate_usd = 0.0002
+provider = "openai"
+model = "deepseek-chat"
+cost_estimate_usd = 0.00005   # 待实测
 
 [stages.phonetic]
 parser_version = "1"
@@ -43,13 +48,11 @@ cost_estimate_usd = 0.0
 [stages.derivatives]
 parser_version = "1"
 prompt_version = "v1"
-provider = "gemini"
-# Morphological lookup (plural/past_tense/synonyms); pattern-matching task,
-# a flash-class model handles it for ~$0.00018/word vs haiku-4.5 $0.00376.
-# Switched 2026-05-01 after the 121k recovery run showed derivatives at
-# $0.004/word × 121k = ~$450; flash brings it to ~$22.
-model = "gemini-2.5-flash"
-cost_estimate_usd = 0.0002
+provider = "openai"
+# Morphological lookup (plural/past_tense/synonyms); pattern-matching task.
+# Was gemini-2.5-flash until 2026-08.
+model = "deepseek-chat"
+cost_estimate_usd = 0.00005   # 待实测
 
 [stages.examples]
 parser_version = "1"
@@ -59,30 +62,21 @@ parser_version = "1"
 prompt_version = "v2"
 provider = "openai"
 # Example sentences + CN translation alignment is the most user-visible
-# pattern-match stage. Flash ($26 full-batch) is cheap but sometimes
-# stilted; gpt-5-mini ($171) is the codex-recommended quality/cost sweet
-# spot — +$145 buys better format stability and fewer wooden translations.
-# Switched 2026-05-01 after the cost/quality review.
-model = "gpt-5-mini"
-cost_estimate_usd = 0.0014
+# pattern-match stage. Was gpt-5-mini until 2026-08.
+model = "deepseek-chat"
+cost_estimate_usd = 0.0002   # 待实测
 
 [stages.mnemonic]
 parser_version = "1"
 prompt_version = "v1"
-provider = "bedrock"
+provider = "openai"
 # Creative phonetic-pun generation — highest-value field; quality 2× weight.
-# 2026-05-01 blind shootout (50 words, opus-4-7 judge) produced:
-#   flash  avg 2.96 / 12 wins / $6   full-batch
-#   qwen   avg 3.17 / 17 wins / $149
-#   sonnet avg 3.39 / 15 wins / $312   ← chosen
-# Codex + gemini theory favored qwen3-max as the "Chinese-phonetic sweet
-# spot"; the data disagreed — sonnet-4-6 led on all three axes
-# (hook/scene/chinese_natural), especially scene_vividness. Qwen's 17 wins
-# came from sporadic high-notes, not consistent quality. The $163 delta
-# (qwen → sonnet) buys +0.22 avg score on a 5-point scale, and under 2×
-# quality weight that clears the cost bar.
-model = "us.anthropic.claude-sonnet-4-6"
-cost_estimate_usd = 0.0026
+# Was sonnet-4-6 via bedrock until 2026-08. 注意 2026-05-01 的盲测里
+# qwen3-max 输给了 sonnet（中文谐音梗场景感弱）；DeepSeek 中文创造力是
+# 强项，但此 stage 是 50 词验证批次的重点对比对象——若不敌，优先试
+# kimi-k2（中文谐音梗传统强项）再试 glm 旗舰。
+model = "deepseek-chat"
+cost_estimate_usd = 0.0004   # 待实测
 
 [stages.quality_gate]
 parser_version = "1"
