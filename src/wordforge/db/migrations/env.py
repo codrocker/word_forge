@@ -123,7 +123,13 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            # Lets a restricted account keep the version table in a schema it
+            # owns (set version_table_schema in alembic.ini); default public.
+            version_table_schema=config.get_main_option("version_table_schema"),
+        )
         with context.begin_transaction():
             context.run_migrations()
 
