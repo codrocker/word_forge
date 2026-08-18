@@ -38,6 +38,42 @@ def _secret_env(monkeypatch):
     monkeypatch.setenv("WORDFORGE_CONFIG_SECRET", Fernet.generate_key().decode())
 
 
+@pytest.fixture(autouse=True)
+def _offline_dns(monkeypatch):
+    """Fake hostnames (.test) can't resolve in CI — fall back to a public
+    IP. Real resolvable hosts (e.g. localhost) keep their real answers, so
+    the SSRF guard behavior stays covered."""
+    import socket as _socket
+
+    real = _socket.getaddrinfo
+
+    def _fake(host, *args, **kwargs):
+        try:
+            return real(host, *args, **kwargs)
+        except _socket.gaierror:
+            return [(2, 1, 6, "", ("93.184.216.34", 443))]
+
+    monkeypatch.setattr(config_center_service.socket, "getaddrinfo", _fake)
+
+
+def test_ssrf_guard_blocks_private_and_loopback_ips():
+    """Literal private/loopback IPs in base_url are rejected (getaddrinfo
+    on a literal IP skips DNS, so this runs offline)."""
+    c = _login_client()
+    for url in ("https://10.1.2.3/v1", "http://127.0.0.1:9000/v1", "https://192.168.1.4/v1"):
+        r = c.post(
+            "/api/v1/config-center/providers",
+            json={
+                "name": f"ssrf-{_UNIQ}-{secrets.token_hex(3)}",
+                "transport": "openai",
+                "base_url": url,
+                "api_key": _new_key_material(),
+            },
+        )
+        assert r.status_code == 400, url
+        assert "non-public" in r.json()["error"]["message"] or "loopback" in r.json()["error"]["message"]
+
+
 def _login_client() -> TestClient:
     # Per-test unique email: no cross-test unique-key collisions, and
     # leftover rows are wiped by the migration tests' downgrade cycles.

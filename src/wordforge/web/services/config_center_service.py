@@ -15,8 +15,11 @@ Versioning model (uniform across the three entities):
 
 from __future__ import annotations
 
+import ipaddress
 import json
+import socket
 from typing import Any
+from urllib.parse import urlparse
 
 import sqlalchemy as sa
 from sqlalchemy.engine import Engine
@@ -25,15 +28,42 @@ from wordforge.web import secrets_box
 from wordforge.web.services.experiment_service import (
     ExperimentError,
 )
-from wordforge.web.services.experiment_service import (
-    _assert_public_http_url as assert_public_http_url,
-)
 
 _VALID_TRANSPORTS = ("openai", "anthropic")
 
 
 class ConfigCenterError(ValueError):
     """User-facing config-center validation error (maps to HTTP 400)."""
+
+
+def _assert_resolvable_public_url(url: str) -> None:
+    """SSRF guard for operator-supplied base URLs: http(s) only, and the
+    hostname must RESOLVE (every address) to a public IP — checking only
+    the literal host lets a DNS name that resolves into the private
+    range bypass the guard. Redirects are not followed at request time."""
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ConfigCenterError(f"base_url scheme must be http/https, got {parsed.scheme!r}")
+    host = parsed.hostname or ""
+    if not host:
+        raise ConfigCenterError("base_url has no host")
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror as e:
+        raise ConfigCenterError(f"cannot resolve base_url host {host!r}") from e
+    for info in infos:
+        addr = ipaddress.ip_address(info[4][0])
+        if (
+            addr.is_private
+            or addr.is_loopback
+            or addr.is_reserved
+            or addr.is_link_local
+            or addr.is_multicast
+            or addr.is_unspecified
+        ):
+            raise ConfigCenterError(
+                f"base_url host {host!r} resolves to a non-public address"
+            )
 
 
 def _one(engine: Engine, sql: str, params: dict) -> dict | None:
@@ -62,7 +92,7 @@ def create_provider(
 ) -> dict:
     if transport not in _VALID_TRANSPORTS:
         raise ConfigCenterError(f"transport must be one of {list(_VALID_TRANSPORTS)}")
-    assert_public_http_url(base_url)
+    _assert_resolvable_public_url(base_url)
     if _one(engine, "SELECT id FROM meta.provider_configs WHERE name = :n", {"n": name}):
         raise ConfigCenterError(f"provider config name {name!r} already exists")
     if not api_key:
@@ -108,7 +138,7 @@ def update_provider(
     if transport is not None and transport not in _VALID_TRANSPORTS:
         raise ConfigCenterError(f"transport must be one of {list(_VALID_TRANSPORTS)}")
     new_url = base_url if base_url is not None else current["base_url"]
-    assert_public_http_url(new_url)
+    _assert_resolvable_public_url(new_url)
     new_name = name if name is not None else current["name"]
     new_transport = transport if transport is not None else current["transport"]
     new_notes = notes if notes is not None else current["notes"]
@@ -245,12 +275,17 @@ def fetch_provider_models(engine: Engine, config_id: int) -> list[str]:
     if current["transport"] != "openai":
         raise ConfigCenterError("model listing only supports openai-compatible transport")
     url = current["base_url"].rstrip("/") + "/models"
-    assert_public_http_url(url)
+    _assert_resolvable_public_url(url)
     try:
         import httpx
     except ImportError as e:
         raise RuntimeError("httpx not installed; `pip install wordforge[web]`") from e
-    resp = httpx.get(url, headers={"Authorization": f"Bearer {api_key}"}, timeout=8.0)
+    resp = httpx.get(
+        url,
+        headers={"Authorization": f"Bearer {api_key}"},
+        timeout=8.0,
+        follow_redirects=False,
+    )
     if resp.status_code != 200:
         raise ConfigCenterError(
             f"upstream {resp.status_code} listing models at {url}"
