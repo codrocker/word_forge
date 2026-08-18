@@ -37,6 +37,9 @@ export function ConfigCenter() {
         <Link to="/experiments" className="text-sm text-blue-600 hover:underline">
           去实验 →
         </Link>
+        <Link to="/help" className="text-sm text-blue-600 hover:underline">
+          使用说明
+        </Link>
         <Link to="/" className="text-sm text-blue-600 hover:underline">
           ← 词库
         </Link>

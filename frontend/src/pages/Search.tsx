@@ -105,6 +105,9 @@ export function Search() {
           <Link to="/config-center" className="text-sm text-blue-600 hover:underline">
             配置中心 &rarr;
           </Link>
+          <Link to="/help" className="text-sm text-blue-600 hover:underline">
+            使用说明 &rarr;
+          </Link>
           <Link to="/audit" className="text-sm text-blue-600 hover:underline">
             Audit Log &rarr;
           </Link>
