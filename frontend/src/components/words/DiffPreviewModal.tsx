@@ -1,5 +1,5 @@
-import { AppModal } from '@/components/app/AppModal';
-import { AppButton } from '@/components/app/AppButton';
+import { Button, Modal, Table } from '@douyinfe/semi-ui';
+import type { ColumnProps } from '@douyinfe/semi-ui/lib/es/table';
 import type { Change } from '@/lib/diffChanges';
 
 type DiffPreviewModalProps = {
@@ -15,6 +15,35 @@ function formatValue(v: unknown): string {
   return String(v);
 }
 
+const columns: ColumnProps<Change>[] = [
+  {
+    title: 'Field',
+    dataIndex: 'field_path',
+    render: (_: unknown, c: Change) => (
+      <span className="font-mono text-xs text-gray-700">
+        {c.field_path}
+        {c.target_id != null && (
+          <span className="ml-1 text-gray-400">#{c.target_id}</span>
+        )}
+      </span>
+    ),
+  },
+  {
+    title: 'Old',
+    dataIndex: 'old_value',
+    render: (v: unknown) => (
+      <span className="font-mono text-xs text-red-600">{formatValue(v)}</span>
+    ),
+  },
+  {
+    title: 'New',
+    dataIndex: 'new_value',
+    render: (v: unknown) => (
+      <span className="font-mono text-xs text-green-600">{formatValue(v)}</span>
+    ),
+  },
+];
+
 export function DiffPreviewModal({
   changes,
   onConfirm,
@@ -22,44 +51,39 @@ export function DiffPreviewModal({
   isPending,
 }: DiffPreviewModalProps) {
   return (
-    <AppModal open={true} onClose={onCancel} title="Confirm Changes">
-      <div className="max-h-80 overflow-y-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b text-left text-gray-600">
-              <th className="pb-2 pr-2">Field</th>
-              <th className="pb-2 pr-2">Old</th>
-              <th className="pb-2">New</th>
-            </tr>
-          </thead>
-          <tbody>
-            {changes.map((c, i) => (
-              <tr key={i} className="border-b last:border-b-0">
-                <td className="py-2 pr-2 font-mono text-xs text-gray-700">
-                  {c.field_path}
-                  {c.target_id != null && (
-                    <span className="ml-1 text-gray-400">#{c.target_id}</span>
-                  )}
-                </td>
-                <td className="py-2 pr-2 text-red-600">
-                  {formatValue(c.old_value)}
-                </td>
-                <td className="py-2 text-green-600">
-                  {formatValue(c.new_value)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+    <Modal
+      title="Confirm Changes"
+      visible
+      onCancel={onCancel}
+      footer={null}
+      width={640}
+    >
+      <Table
+        columns={columns}
+        dataSource={changes}
+        rowKey={(c) => `${c?.field_path ?? ''}#${c?.target_id ?? ''}`}
+        pagination={false}
+        size="small"
+        scroll={{ y: 320 }}
+      />
       <div className="mt-4 flex justify-end gap-3">
-        <AppButton variant="secondary" onClick={onCancel} disabled={isPending}>
+        <Button
+          theme="light"
+          htmlType="button"
+          onClick={onCancel}
+          disabled={isPending}
+        >
           Cancel
-        </AppButton>
-        <AppButton onClick={onConfirm} disabled={isPending}>
+        </Button>
+        <Button
+          theme="solid"
+          htmlType="button"
+          onClick={onConfirm}
+          loading={isPending}
+        >
           {isPending ? 'Saving...' : `Apply ${changes.length} change(s)`}
-        </AppButton>
+        </Button>
       </div>
-    </AppModal>
+    </Modal>
   );
 }

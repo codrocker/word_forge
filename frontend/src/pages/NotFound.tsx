@@ -1,13 +1,14 @@
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import { Button, Empty } from '@douyinfe/semi-ui';
 
 export function NotFoundPage() {
+  const navigate = useNavigate();
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-4 text-gray-600">
-      <h1 className="text-4xl font-bold">404</h1>
-      <p>Page not found</p>
-      <Link to="/" className="text-blue-600 underline hover:text-blue-800">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4">
+      <Empty title="404 · Page not found" description="" />
+      <Button theme="solid" htmlType="button" onClick={() => navigate('/')}>
         Go home
-      </Link>
+      </Button>
     </div>
   );
 }

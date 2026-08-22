@@ -1,4 +1,5 @@
 import { Navigate, Outlet } from 'react-router-dom';
+import { Spin } from '@douyinfe/semi-ui';
 import { useMeQuery } from '@/api/auth';
 
 export function ProtectedRoute() {
@@ -6,8 +7,8 @@ export function ProtectedRoute() {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen items-center justify-center text-gray-500">
-        Loading...
+      <div className="flex h-screen items-center justify-center">
+        <Spin size="large" />
       </div>
     );
   }

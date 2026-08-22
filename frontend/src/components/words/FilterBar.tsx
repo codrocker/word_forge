@@ -1,4 +1,5 @@
-import { AppSelect } from '@/components/app/AppSelect';
+import { Input, Select } from '@douyinfe/semi-ui';
+import { IconSearch } from '@douyinfe/semi-icons';
 
 const STATUS_OPTIONS = [
   { label: 'Draft (0)', value: '0' },
@@ -16,6 +17,36 @@ const TYPE_OPTIONS = [
   { label: 'Word (1)', value: '1' },
   { label: 'Phrase (2)', value: '2' },
 ];
+
+type LabeledSelectProps = {
+  label: string;
+  options: { label: string; value: string }[];
+  placeholder?: string;
+  value: string;
+  onChange: (value: string) => void;
+};
+
+function LabeledSelect({
+  label,
+  options,
+  placeholder,
+  value,
+  onChange,
+}: LabeledSelectProps) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="text-sm font-medium text-gray-700">{label}</label>
+      <Select
+        style={{ width: 180 }}
+        placeholder={placeholder}
+        value={value || undefined}
+        onChange={(v) => onChange(String(v ?? ''))}
+        optionList={options}
+        showClear
+      />
+    </div>
+  );
+}
 
 type FilterBarProps = {
   qValue: string;
@@ -42,37 +73,38 @@ export function FilterBar({
     <div className="flex flex-wrap items-end gap-4">
       <div className="flex flex-col gap-1">
         <label className="text-sm font-medium text-gray-700">Search</label>
-        <input
-          type="text"
-          value={qValue}
-          onChange={(e) => onQChange(e.target.value)}
+        <Input
+          style={{ width: 260 }}
+          prefix={<IconSearch />}
+          showClear
           placeholder="Search by word form..."
-          className="rounded border border-gray-300 px-3 py-2 text-sm outline-none transition-colors focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          value={qValue}
+          onChange={(v) => onQChange(v)}
         />
       </div>
 
-      <AppSelect
+      <LabeledSelect
         label="Status"
         options={STATUS_OPTIONS}
         placeholder="All statuses"
         value={status}
-        onChange={(e) => onStatusChange(e.target.value)}
+        onChange={onStatusChange}
       />
 
-      <AppSelect
+      <LabeledSelect
         label="Quality"
         options={QUALITY_OPTIONS}
         placeholder="All qualities"
         value={quality}
-        onChange={(e) => onQualityChange(e.target.value)}
+        onChange={onQualityChange}
       />
 
-      <AppSelect
+      <LabeledSelect
         label="Type"
         options={TYPE_OPTIONS}
         placeholder="All types"
         value={type}
-        onChange={(e) => onTypeChange(e.target.value)}
+        onChange={onTypeChange}
       />
     </div>
   );

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AppButton } from '@/components/app/AppButton';
+import { Button, Select } from '@douyinfe/semi-ui';
 
 type StatusQualityToggleProps = {
   status: number;
@@ -39,27 +39,23 @@ export function StatusQualityToggle({
       <div className="flex flex-col gap-1">
         <label className="text-sm font-medium text-gray-700">Status</label>
         <div className="flex items-center gap-2">
-          <select
+          <Select
+            style={{ width: 140 }}
             value={localStatus}
-            onChange={(e) => setLocalStatus(Number(e.target.value))}
+            onChange={(v) => setLocalStatus(Number(v))}
+            optionList={STATUS_OPTIONS}
             disabled={disabled}
-            className="rounded border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-          >
-            {STATUS_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
+          />
           {statusDirty && (
-            <AppButton
-              type="button"
+            <Button
+              size="small"
+              theme="solid"
+              htmlType="button"
               disabled={disabled}
               onClick={() => onChangeStatus(status, localStatus)}
-              className="text-xs"
             >
               Save
-            </AppButton>
+            </Button>
           )}
         </div>
       </div>
@@ -67,27 +63,23 @@ export function StatusQualityToggle({
       <div className="flex flex-col gap-1">
         <label className="text-sm font-medium text-gray-700">Quality</label>
         <div className="flex items-center gap-2">
-          <select
+          <Select
+            style={{ width: 140 }}
             value={localQuality}
-            onChange={(e) => setLocalQuality(e.target.value)}
+            onChange={(v) => setLocalQuality(String(v))}
+            optionList={QUALITY_OPTIONS}
             disabled={disabled}
-            className="rounded border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-          >
-            {QUALITY_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
+          />
           {qualityDirty && (
-            <AppButton
-              type="button"
+            <Button
+              size="small"
+              theme="solid"
+              htmlType="button"
               disabled={disabled}
               onClick={() => onChangeQuality(qualityFlag, localQuality)}
-              className="text-xs"
             >
               Save
-            </AppButton>
+            </Button>
           )}
         </div>
       </div>

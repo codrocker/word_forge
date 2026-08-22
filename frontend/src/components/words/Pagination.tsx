@@ -1,4 +1,4 @@
-import { AppButton } from '@/components/app/AppButton';
+import { Button } from '@douyinfe/semi-ui';
 
 type PaginationProps = {
   hasNext: boolean;
@@ -7,6 +7,7 @@ type PaginationProps = {
   hasCursor: boolean;
 };
 
+/** keyset 游标分页：只有 Next / Back to first 两个动作，没有页码。 */
 export function Pagination({
   hasNext,
   onNext,
@@ -16,14 +17,14 @@ export function Pagination({
   return (
     <div className="flex items-center gap-3">
       {hasCursor && (
-        <AppButton variant="secondary" onClick={onReset}>
+        <Button theme="light" htmlType="button" onClick={onReset}>
           Back to first page
-        </AppButton>
+        </Button>
       )}
       {hasNext && (
-        <AppButton variant="primary" onClick={onNext}>
+        <Button theme="solid" htmlType="button" onClick={onNext}>
           Next page
-        </AppButton>
+        </Button>
       )}
     </div>
   );

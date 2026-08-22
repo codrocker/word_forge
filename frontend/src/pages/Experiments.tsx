@@ -1,19 +1,125 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import {
+  Banner,
+  Button,
+  Input,
+  InputNumber,
+  Select,
+  Table,
+  Tag,
+  TextArea,
+  Typography,
+} from '@douyinfe/semi-ui';
+import type { ColumnProps } from '@douyinfe/semi-ui/lib/es/table';
 import {
   useProvidersQuery,
   useModelsQuery,
   useRunsQuery,
   useCreateRunMutation,
+  type ExperimentRun,
 } from '@/api/experiments';
 import { useAgentsQuery } from '@/api/configCenter';
 import { ApiError } from '@/api/client';
 
-const STATUS_STYLE: Record<string, string> = {
-  running: 'text-yellow-600',
-  done: 'text-green-700',
-  error: 'text-red-600',
+type ExperimentResult = NonNullable<ExperimentRun['results']>[number];
+
+const STATUS_COLOR: Record<string, 'amber' | 'green' | 'red'> = {
+  running: 'amber',
+  done: 'green',
+  error: 'red',
 };
+
+const runColumns: ColumnProps<ExperimentRun>[] = [
+  { title: '#', dataIndex: 'id' },
+  {
+    title: '供应商 / 模型',
+    render: (_: unknown, r: ExperimentRun) => (
+      <span className="font-mono text-xs">
+        {r.provider} / {r.model}
+      </span>
+    ),
+  },
+  { title: 'Stage', dataIndex: 'stage' },
+  {
+    title: '词数',
+    render: (_: unknown, r: ExperimentRun) => r.results?.length || '-',
+  },
+  {
+    title: '解析通过',
+    render: (_: unknown, r: ExperimentRun) => {
+      const total = r.results?.length ?? 0;
+      return total ? `${r.ok_count}/${total}` : r.ok_count;
+    },
+  },
+  {
+    title: 'Schema 有效',
+    render: (_: unknown, r: ExperimentRun) => {
+      const total = r.results?.length ?? 0;
+      return total ? `${r.valid_count}/${total}` : r.valid_count;
+    },
+  },
+  {
+    title: '成本 $',
+    render: (_: unknown, r: ExperimentRun) =>
+      Number(r.total_cost_usd).toFixed(4),
+  },
+  {
+    title: '状态',
+    dataIndex: 'status',
+    render: (status: string) =>
+      STATUS_COLOR[status] ? (
+        <Tag size="small" color={STATUS_COLOR[status]}>
+          {status}
+        </Tag>
+      ) : (
+        status
+      ),
+  },
+  {
+    title: '时间',
+    dataIndex: 'created_at',
+    render: (v: string) => (
+      <span className="text-gray-500">{new Date(v).toLocaleString()}</span>
+    ),
+  },
+];
+
+const resultColumns: ColumnProps<ExperimentResult>[] = [
+  {
+    title: '词',
+    dataIndex: 'word',
+    render: (v: string) => <span className="font-medium">{v}</span>,
+  },
+  {
+    title: '有效',
+    render: (_: unknown, w: ExperimentResult) => (
+      <span className={w.valid ? 'text-green-700' : 'text-red-600'}>
+        {w.valid ? '✓' : w.ok ? '解析失败' : '调用失败'}
+      </span>
+    ),
+  },
+  {
+    title: '成本 $',
+    dataIndex: 'cost_usd',
+    render: (v: number) => v.toFixed(4),
+  },
+  {
+    title: '耗时 ms',
+    dataIndex: 'latency_ms',
+    render: (v: number | null) => v ?? '-',
+  },
+  {
+    title: '输出 / 错误',
+    render: (_: unknown, w: ExperimentResult) =>
+      w.error ? (
+        <span className="text-red-600">{w.error}</span>
+      ) : (
+        <pre className="max-w-3xl whitespace-pre-wrap break-all font-mono">
+          {w.text}
+        </pre>
+      ),
+  },
+];
 
 export function Experiments() {
   const providersQ = useProvidersQuery();
@@ -35,7 +141,9 @@ export function Experiments() {
   const stages = providersQ.data?.stages ?? [];
   const runs = runsQ.data?.items ?? [];
   const agentMode = agentId !== '';
-  const selectedAgent = (agentsQ.data ?? []).find((a) => String(a.id) === agentId);
+  const selectedAgent = (agentsQ.data ?? []).find(
+    (a) => String(a.id) === agentId,
+  );
   const agentRecipe = selectedAgent?.versions?.[0];
 
   const submit = () => {
@@ -68,21 +176,9 @@ export function Experiments() {
 
   return (
     <div className="mx-auto max-w-6xl p-6">
-      <div className="mb-4 flex items-center gap-4">
-        <h1 className="text-xl font-semibold">LLM 实验</h1>
-        <Link to="/" className="text-sm text-blue-600 hover:underline">
-          ← 词库
-        </Link>
-        <Link to="/config-center" className="text-sm text-blue-600 hover:underline">
-          配置中心
-        </Link>
-        <Link to="/help" className="text-sm text-blue-600 hover:underline">
-          使用说明
-        </Link>
-        <Link to="/audit" className="text-sm text-blue-600 hover:underline">
-          审计日志
-        </Link>
-      </div>
+      <Typography.Title heading={4} className="mb-4">
+        LLM 实验
+      </Typography.Title>
 
       <section className="mb-6 rounded border p-4">
         <h2 className="mb-3 text-sm font-semibold text-gray-700">新建实验</h2>
@@ -91,112 +187,109 @@ export function Experiments() {
             <span className="mb-1 block text-gray-600">
               Agent（选它则用配置中心的版本化组合；留空走下面的点选模式）
             </span>
-            <select
-              className="w-full rounded border px-2 py-1"
-              value={agentId}
-              onChange={(e) => setAgentId(e.target.value)}
-            >
-              <option value="">— 点选模式 —</option>
-              {(agentsQ.data ?? []).map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}（v{a.current_version}）
-                </option>
-              ))}
-            </select>
+            <Select
+              className="w-full"
+              value={agentId || undefined}
+              onChange={(v) => setAgentId(String(v ?? ''))}
+              optionList={[
+                { value: '', label: '— 点选模式 —' },
+                ...(agentsQ.data ?? []).map((a) => ({
+                  value: String(a.id),
+                  label: `${a.name}（v${a.current_version}）`,
+                })),
+              ]}
+            />
           </label>
           {agentMode && agentRecipe ? (
             <div className="text-sm md:col-span-3">
-              <span className="mb-1 block text-gray-600">Agent 配方（来自配置中心，随版本固定）</span>
+              <span className="mb-1 block text-gray-600">
+                Agent 配方（来自配置中心，随版本固定）
+              </span>
               <p className="rounded bg-gray-50 px-2 py-1 font-mono text-xs text-gray-700">
-                {agentRecipe.provider_config_name} v{agentRecipe.provider_config_version} ·{' '}
-                {agentRecipe.model} · {agentRecipe.prompt_name} v{agentRecipe.prompt_version}
+                {agentRecipe.provider_config_name} v
+                {agentRecipe.provider_config_version} · {agentRecipe.model} ·{' '}
+                {agentRecipe.prompt_name} v{agentRecipe.prompt_version}
               </p>
             </div>
           ) : (
             <>
-          <label className="text-sm">
-            <span className="mb-1 block text-gray-600">供应商</span>
-            <select
-              className="w-full rounded border px-2 py-1"
-              value={providerId ?? ''}
-              onChange={(e) => setProvider(e.target.value)}
-            >
-              {(providersQ.data?.providers ?? []).map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.id}
-                  {p.available ? '' : '（未配置密钥）'}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-sm">
-            <span className="mb-1 block text-gray-600">
-              模型{' '}
-              {modelsQ.isFetching ? (
-                <span className="text-gray-400">拉取中…</span>
-              ) : modelsQ.isError ? (
-                <span className="text-gray-400" title={(modelsQ.error as Error).message}>
-                  列表拉取失败，可手填
+              <label className="text-sm">
+                <span className="mb-1 block text-gray-600">供应商</span>
+                <Select
+                  className="w-full"
+                  value={providerId ?? undefined}
+                  onChange={(v) => setProvider(String(v ?? ''))}
+                  optionList={(providersQ.data?.providers ?? []).map((p) => ({
+                    value: p.id,
+                    label: p.id + (p.available ? '' : '（未配置密钥）'),
+                  }))}
+                />
+              </label>
+              <label className="text-sm">
+                <span className="mb-1 block text-gray-600">
+                  模型{' '}
+                  {modelsQ.isFetching ? (
+                    <span className="text-gray-400">拉取中…</span>
+                  ) : modelsQ.isError ? (
+                    <span
+                      className="text-gray-400"
+                      title={(modelsQ.error as Error).message}
+                    >
+                      列表拉取失败，可手填
+                    </span>
+                  ) : null}
                 </span>
-              ) : null}
-            </span>
-            {modelsQ.data && modelsQ.data.length > 0 ? (
-              <select
-                className="w-full rounded border px-2 py-1"
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-              >
-                <option value="">选择模型…</option>
-                {modelsQ.data.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                className="w-full rounded border px-2 py-1"
-                placeholder="例如 deepseek-chat"
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-              />
-            )}
-          </label>
-          <label className="text-sm">
-            <span className="mb-1 block text-gray-600">Stage</span>
-            <select
-              className="w-full rounded border px-2 py-1"
-              value={stage}
-              onChange={(e) => setStage(e.target.value)}
-            >
-              {stages.map((s) => (
-                <option key={s.stage} value={s.stage}>
-                  {s.stage}
-                  {s.default_model ? `（默认 ${s.default_model}）` : ''}
-                </option>
-              ))}
-            </select>
-          </label>
+                {modelsQ.data && modelsQ.data.length > 0 ? (
+                  <Select
+                    className="w-full"
+                    placeholder="选择模型…"
+                    value={model || undefined}
+                    onChange={(v) => setModel(String(v ?? ''))}
+                    optionList={modelsQ.data.map((m) => ({
+                      value: m,
+                      label: m,
+                    }))}
+                  />
+                ) : (
+                  <Input
+                    className="w-full"
+                    placeholder="例如 deepseek-chat"
+                    value={model}
+                    onChange={(v) => setModel(v)}
+                  />
+                )}
+              </label>
+              <label className="text-sm">
+                <span className="mb-1 block text-gray-600">Stage</span>
+                <Select
+                  className="w-full"
+                  value={stage}
+                  onChange={(v) => setStage(String(v ?? 'paraphrase'))}
+                  optionList={stages.map((s) => ({
+                    value: s.stage,
+                    label:
+                      s.stage + (s.default_model ? `（默认 ${s.default_model}）` : ''),
+                  }))}
+                />
+              </label>
             </>
           )}
           <label className="text-sm">
             <span className="mb-1 block text-gray-600">词数（1-200）</span>
-            <input
-              type="number"
+            <InputNumber
+              className="w-full"
               min={1}
               max={200}
-              className="w-full rounded border px-2 py-1"
               value={wordCount}
-              onChange={(e) => setWordCount(Number(e.target.value))}
+              onChange={(v) => setWordCount(Number(v))}
             />
           </label>
           <label className="text-sm">
             <span className="mb-1 block text-gray-600">种子（同种子=同词样）</span>
-            <input
-              type="number"
-              className="w-full rounded border px-2 py-1"
+            <InputNumber
+              className="w-full"
               value={seed}
-              onChange={(e) => setSeed(Number(e.target.value))}
+              onChange={(v) => setSeed(Number(v))}
             />
           </label>
         </div>
@@ -204,138 +297,60 @@ export function Experiments() {
           <span className="mb-1 block text-gray-600">
             提示词覆盖（留空用 stage 默认模板；可用变量 {'{word}'} {'{dict_summary}'}）
           </span>
-          <textarea
-            className="h-24 w-full rounded border px-2 py-1 font-mono text-xs"
+          <TextArea
+            rows={4}
             placeholder="留空 = 使用 resources/prompts 下该 stage 的默认模板"
             value={promptOverride}
-            onChange={(e) => setPromptOverride(e.target.value)}
+            onChange={(v) => setPromptOverride(v)}
           />
         </label>
         <div className="mt-3 flex items-center gap-3">
-          <button
-            type="button"
-            className="rounded bg-blue-600 px-4 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
-            disabled={
-              createRun.isPending ||
-              (agentMode ? !agentId : !providerId || !model.trim())
-            }
+          <Button
+            theme="solid"
+            htmlType="button"
+            loading={createRun.isPending}
+            disabled={agentMode ? !agentId : !providerId || !model.trim()}
             onClick={submit}
           >
-            {createRun.isPending ? '提交中…' : '运行实验'}
-          </button>
+            运行实验
+          </Button>
           {err && <span className="text-sm text-red-600">{err}</span>}
         </div>
       </section>
 
       <section>
-        <h2 className="mb-2 text-sm font-semibold text-gray-700">运行记录（对比口径：同种子同词样）</h2>
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="border-b text-left text-gray-600">
-              <th className="py-1.5 pr-3">#</th>
-              <th className="py-1.5 pr-3">供应商 / 模型</th>
-              <th className="py-1.5 pr-3">Stage</th>
-              <th className="py-1.5 pr-3">词数</th>
-              <th className="py-1.5 pr-3">解析通过</th>
-              <th className="py-1.5 pr-3">Schema 有效</th>
-              <th className="py-1.5 pr-3">成本 $</th>
-              <th className="py-1.5 pr-3">状态</th>
-              <th className="py-1.5 pr-3">时间</th>
-            </tr>
-          </thead>
-          <tbody>
-            {runs.map((r) => (
-              <RunRow key={r.id} run={r} />
-            ))}
-            {runs.length === 0 && (
-              <tr>
-                <td colSpan={9} className="py-3 text-center text-gray-400">
-                  暂无运行记录
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        <h2 className="mb-2 text-sm font-semibold text-gray-700">
+          运行记录（对比口径：同种子同词样）
+        </h2>
+        <Table
+          columns={runColumns}
+          dataSource={runs}
+          rowKey="id"
+          pagination={false}
+          empty="暂无运行记录"
+          expandedRowRender={(run) =>
+            run ? (
+              <div className="max-h-96 overflow-auto">
+                {run.error && (
+                  <Banner
+                    type="danger"
+                    description={run.error}
+                    closeIcon={null}
+                    className="mb-2"
+                  />
+                )}
+                <Table
+                  columns={resultColumns}
+                  dataSource={run.results ?? []}
+                  rowKey="word_id"
+                  pagination={false}
+                  size="small"
+                />
+              </div>
+            ) : null
+          }
+        />
       </section>
     </div>
-  );
-}
-
-function RunRow({ run }: { run: import('@/api/experiments').ExperimentRun }) {
-  const [open, setOpen] = useState(false);
-  const total = run.results?.length ?? 0;
-  return (
-    <>
-      <tr className="border-b hover:bg-gray-50">
-        <td className="py-1.5 pr-3">
-          <button
-            type="button"
-            className="text-blue-600 hover:underline"
-            onClick={() => setOpen(!open)}
-          >
-            {run.id}
-          </button>
-        </td>
-        <td className="py-1.5 pr-3 font-mono text-xs">
-          {run.provider} / {run.model}
-        </td>
-        <td className="py-1.5 pr-3">{run.stage}</td>
-        <td className="py-1.5 pr-3">{total || '-'}</td>
-        <td className="py-1.5 pr-3">
-          {run.ok_count}
-          {total ? `/${total}` : ''}
-        </td>
-        <td className="py-1.5 pr-3">
-          {run.valid_count}
-          {total ? `/${total}` : ''}
-        </td>
-        <td className="py-1.5 pr-3">{Number(run.total_cost_usd).toFixed(4)}</td>
-        <td className={`py-1.5 pr-3 ${STATUS_STYLE[run.status] ?? ''}`}>{run.status}</td>
-        <td className="py-1.5 pr-3 text-gray-500">
-          {new Date(run.created_at).toLocaleString()}
-        </td>
-      </tr>
-      {open && (
-        <tr>
-          <td colSpan={9} className="bg-gray-50 px-4 py-3">
-            {run.error && <p className="mb-2 text-red-600">{run.error}</p>}
-            <div className="max-h-96 overflow-auto">
-              <table className="w-full border-collapse text-xs">
-                <thead>
-                  <tr className="border-b text-left text-gray-500">
-                    <th className="py-1 pr-3">词</th>
-                    <th className="py-1 pr-3">有效</th>
-                    <th className="py-1 pr-3">成本 $</th>
-                    <th className="py-1 pr-3">耗时 ms</th>
-                    <th className="py-1 pr-3">输出 / 错误</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(run.results ?? []).map((w) => (
-                    <tr key={w.word_id} className="border-b align-top">
-                      <td className="py-1 pr-3 font-medium">{w.word}</td>
-                      <td className={`py-1 pr-3 ${w.valid ? 'text-green-700' : 'text-red-600'}`}>
-                        {w.valid ? '✓' : w.ok ? '解析失败' : '调用失败'}
-                      </td>
-                      <td className="py-1 pr-3">{w.cost_usd.toFixed(4)}</td>
-                      <td className="py-1 pr-3">{w.latency_ms ?? '-'}</td>
-                      <td className="py-1 pr-3">
-                        {w.error ? (
-                          <span className="text-red-600">{w.error}</span>
-                        ) : (
-                          <pre className="max-w-3xl whitespace-pre-wrap break-all font-mono">
-                            {w.text}
-                          </pre>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </td>
-        </tr>
-      )}
-    </>
   );
 }

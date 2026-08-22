@@ -1,3 +1,5 @@
+import { DatePicker, Input } from '@douyinfe/semi-ui';
+
 type AuditFilterBarProps = {
   wordId: string;
   onWordIdChange: (v: string) => void;
@@ -8,6 +10,13 @@ type AuditFilterBarProps = {
   until: string;
   onUntilChange: (v: string) => void;
 };
+
+/** 'YYYY-MM-DD' → 本地时区 Date（直接 new Date(str) 会按 UTC 解析，西半球会偏一天）。 */
+function parseLocalDate(s: string): Date | undefined {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (!m) return undefined;
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+}
 
 export function AuditFilterBar({
   wordId,
@@ -21,47 +30,51 @@ export function AuditFilterBar({
 }: AuditFilterBarProps) {
   return (
     <div className="flex flex-wrap items-end gap-4">
-      <label className="flex flex-col text-sm text-gray-700">
+      <label className="flex flex-col gap-1 text-sm text-gray-700">
         Word ID
-        <input
-          type="text"
-          inputMode="numeric"
-          value={wordId}
-          onChange={(e) => onWordIdChange(e.target.value)}
+        <Input
+          style={{ width: 140 }}
           placeholder="e.g. 100123"
-          className="mt-1 w-32 rounded border border-gray-300 px-2 py-1 text-sm"
+          value={wordId}
+          onChange={(v) => onWordIdChange(v)}
         />
       </label>
 
-      <label className="flex flex-col text-sm text-gray-700">
+      <label className="flex flex-col gap-1 text-sm text-gray-700">
         Editor ID
-        <input
-          type="text"
-          inputMode="numeric"
-          value={editorId}
-          onChange={(e) => onEditorIdChange(e.target.value)}
+        <Input
+          style={{ width: 120 }}
           placeholder="e.g. 1"
-          className="mt-1 w-28 rounded border border-gray-300 px-2 py-1 text-sm"
+          value={editorId}
+          onChange={(v) => onEditorIdChange(v)}
         />
       </label>
 
-      <label className="flex flex-col text-sm text-gray-700">
+      <label className="flex flex-col gap-1 text-sm text-gray-700">
         Since
-        <input
+        <DatePicker
           type="date"
-          value={since}
-          onChange={(e) => onSinceChange(e.target.value)}
-          className="mt-1 rounded border border-gray-300 px-2 py-1 text-sm"
+          format="yyyy-MM-dd"
+          style={{ width: 160 }}
+          placeholder="Since"
+          value={parseLocalDate(since)}
+          onChange={(formatted) =>
+            onSinceChange(typeof formatted === 'string' ? formatted : '')
+          }
         />
       </label>
 
-      <label className="flex flex-col text-sm text-gray-700">
+      <label className="flex flex-col gap-1 text-sm text-gray-700">
         Until
-        <input
+        <DatePicker
           type="date"
-          value={until}
-          onChange={(e) => onUntilChange(e.target.value)}
-          className="mt-1 rounded border border-gray-300 px-2 py-1 text-sm"
+          format="yyyy-MM-dd"
+          style={{ width: 160 }}
+          placeholder="Until"
+          value={parseLocalDate(until)}
+          onChange={(formatted) =>
+            onUntilChange(typeof formatted === 'string' ? formatted : '')
+          }
         />
       </label>
     </div>

@@ -1,73 +1,83 @@
+import { Table, Tag } from '@douyinfe/semi-ui';
+import type { ColumnProps } from '@douyinfe/semi-ui/lib/es/table';
 import type { WordListItem } from '@/api/words';
+
+const STATUS_TAG: Record<
+  number,
+  { label: string; color: 'orange' | 'green' | 'grey' }
+> = {
+  0: { label: 'Draft', color: 'orange' },
+  1: { label: 'Published', color: 'green' },
+  2: { label: 'Archived', color: 'grey' },
+};
+
+const TYPE_LABEL: Record<number, string> = { 1: 'Word', 2: 'Phrase' };
+
+const columns: ColumnProps<WordListItem>[] = [
+  {
+    title: 'ID',
+    dataIndex: 'word_id',
+    render: (id: number) => (
+      <span className="font-mono text-xs text-gray-500">{id}</span>
+    ),
+  },
+  {
+    title: 'Form',
+    dataIndex: 'form',
+    render: (form: string) => (
+      <span className="font-medium text-gray-900">{form}</span>
+    ),
+  },
+  {
+    title: 'Type',
+    dataIndex: 'type',
+    render: (t: number) => TYPE_LABEL[t] ?? String(t),
+  },
+  {
+    title: 'Status',
+    dataIndex: 'status',
+    render: (status: number) => {
+      const tag = STATUS_TAG[status];
+      return tag ? (
+        <Tag color={tag.color} size="small">
+          {tag.label}
+        </Tag>
+      ) : (
+        String(status)
+      );
+    },
+  },
+  {
+    title: 'Quality',
+    dataIndex: 'quality_flag',
+  },
+  {
+    title: 'Meanings',
+    dataIndex: 'meaning_count',
+  },
+  {
+    title: 'Updated',
+    dataIndex: 'updated_at',
+    render: (v: string) => <span className="text-xs text-gray-500">{v}</span>,
+  },
+];
 
 type WordTableProps = {
   items: WordListItem[];
   onRowClick: (wordId: number) => void;
 };
 
-function formatStatus(status: number): string {
-  switch (status) {
-    case 0:
-      return 'Draft';
-    case 1:
-      return 'Published';
-    case 2:
-      return 'Archived';
-    default:
-      return String(status);
-  }
-}
-
-function formatType(type: number): string {
-  switch (type) {
-    case 1:
-      return 'Word';
-    case 2:
-      return 'Phrase';
-    default:
-      return String(type);
-  }
-}
-
 export function WordTable({ items, onRowClick }: WordTableProps) {
   return (
-    <div className="overflow-x-auto rounded border border-gray-200">
-      <table className="w-full text-left text-sm">
-        <thead className="border-b bg-gray-50 text-xs uppercase text-gray-600">
-          <tr>
-            <th className="px-4 py-3">ID</th>
-            <th className="px-4 py-3">Form</th>
-            <th className="px-4 py-3">Type</th>
-            <th className="px-4 py-3">Status</th>
-            <th className="px-4 py-3">Quality</th>
-            <th className="px-4 py-3">Meanings</th>
-            <th className="px-4 py-3">Updated</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-100">
-          {items.map((item) => (
-            <tr
-              key={item.word_id}
-              onClick={() => onRowClick(item.word_id)}
-              className="cursor-pointer hover:bg-blue-50 transition-colors"
-            >
-              <td className="px-4 py-3 font-mono text-xs text-gray-500">
-                {item.word_id}
-              </td>
-              <td className="px-4 py-3 font-medium text-gray-900">
-                {item.form}
-              </td>
-              <td className="px-4 py-3">{formatType(item.type)}</td>
-              <td className="px-4 py-3">{formatStatus(item.status)}</td>
-              <td className="px-4 py-3">{item.quality_flag}</td>
-              <td className="px-4 py-3">{item.meaning_count}</td>
-              <td className="px-4 py-3 text-xs text-gray-500">
-                {item.updated_at}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <Table
+      columns={columns}
+      dataSource={items}
+      rowKey="word_id"
+      pagination={false}
+      onRow={(record) => ({
+        onClick: () => onRowClick(record!.word_id),
+        style: { cursor: 'pointer' },
+      })}
+    />
   );
 }

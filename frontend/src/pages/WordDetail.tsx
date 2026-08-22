@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import toast from 'react-hot-toast';
+import { Toast, Banner, Spin, Typography } from '@douyinfe/semi-ui';
 import { useQueryClient } from '@tanstack/react-query';
 import { ApiError } from '@/api/client';
 import {
@@ -29,16 +29,21 @@ export function WordDetail() {
 
   if (isLoading) {
     return (
-      <div className="py-12 text-center text-gray-500">Loading...</div>
+      <div className="py-12 text-center">
+        <Spin size="large" />
+      </div>
     );
   }
 
   if (error) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-6">
-        <div className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error instanceof ApiError ? error.message : 'Failed to load word'}
-        </div>
+        <Banner
+          type="danger"
+          description={
+            error instanceof ApiError ? error.message : 'Failed to load word'
+          }
+        />
       </div>
     );
   }
@@ -47,7 +52,7 @@ export function WordDetail() {
 
   function handleSubmitChanges(changes: Change[]) {
     if (changes.length === 0) {
-      toast.success('No changes to submit');
+      Toast.success('No changes to submit');
       return;
     }
     setPendingChanges(changes);
@@ -59,21 +64,21 @@ export function WordDetail() {
       { changes: pendingChanges },
       {
         onSuccess: () => {
-          toast.success('Changes saved');
+          Toast.success('Changes saved');
           setShowDiff(false);
           setPendingChanges([]);
         },
         onError: (e) => {
           const reqSuffix = e instanceof ApiError && e.requestId ? ` (req: ${e.requestId})` : '';
           if (e instanceof ApiError && e.code === 'conflict') {
-            toast.error('Conflict: someone else modified this word. Please refresh and retry.' + reqSuffix);
+            Toast.error('Conflict: someone else modified this word. Please refresh and retry.' + reqSuffix);
             setShowDiff(false);
             // Invalidate to fetch latest, but preserve user form state
             void queryClient.invalidateQueries({
               queryKey: ['words', 'detail', wordId],
             });
           } else {
-            toast.error((e instanceof ApiError ? e.message : 'Save failed') + reqSuffix);
+            Toast.error((e instanceof ApiError ? e.message : 'Save failed') + reqSuffix);
           }
         },
       },
@@ -84,13 +89,13 @@ export function WordDetail() {
     changeStatus.mutate(
       { old_value: oldV, new_value: newV },
       {
-        onSuccess: () => toast.success('Status updated'),
+        onSuccess: () => Toast.success('Status updated'),
         onError: (e) => {
           const reqSuffix = e instanceof ApiError && e.requestId ? ` (req: ${e.requestId})` : '';
           if (e instanceof ApiError && e.code === 'conflict') {
-            toast.error('Status conflict: refresh and retry' + reqSuffix);
+            Toast.error('Status conflict: refresh and retry' + reqSuffix);
           } else {
-            toast.error((e instanceof ApiError ? e.message : 'Failed') + reqSuffix);
+            Toast.error((e instanceof ApiError ? e.message : 'Failed') + reqSuffix);
           }
         },
       },
@@ -101,13 +106,13 @@ export function WordDetail() {
     changeQuality.mutate(
       { old_value: oldV, new_value: newV },
       {
-        onSuccess: () => toast.success('Quality updated'),
+        onSuccess: () => Toast.success('Quality updated'),
         onError: (e) => {
           const reqSuffix = e instanceof ApiError && e.requestId ? ` (req: ${e.requestId})` : '';
           if (e instanceof ApiError && e.code === 'conflict') {
-            toast.error('Quality conflict: refresh and retry' + reqSuffix);
+            Toast.error('Quality conflict: refresh and retry' + reqSuffix);
           } else {
-            toast.error((e instanceof ApiError ? e.message : 'Failed') + reqSuffix);
+            Toast.error((e instanceof ApiError ? e.message : 'Failed') + reqSuffix);
           }
         },
       },
@@ -117,15 +122,12 @@ export function WordDetail() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-6">
       <div className="mb-4 flex items-center gap-3">
-        <Link
-          to="/"
-          className="text-sm text-blue-600 hover:underline"
-        >
+        <Link to="/" className="text-sm text-blue-600 hover:underline">
           &larr; Back to list
         </Link>
-        <h1 className="text-2xl font-bold text-gray-900">
+        <Typography.Title heading={4} className="!mb-0">
           {data.word.form}
-        </h1>
+        </Typography.Title>
         <Link
           to={`/audit?word_id=${wordId}`}
           className="ml-auto text-sm text-blue-600 hover:underline"

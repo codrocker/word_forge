@@ -1,7 +1,7 @@
 import { type ReactNode } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
-import { AppFormInput } from '@/components/app/AppFormInput';
-import { AppButton } from '@/components/app/AppButton';
+import { Button } from '@douyinfe/semi-ui';
+import { RhfInput } from '@/components/form/RhfInput';
 import { diffChanges, type WordDetailForm, type Change } from '@/lib/diffChanges';
 
 type WordEditFormProps = {
@@ -15,10 +15,9 @@ export function WordEditForm({
   onSubmitChanges,
   children,
 }: WordEditFormProps) {
-  const { register, control, handleSubmit, formState } =
-    useForm<WordDetailForm>({
-      defaultValues: defaults,
-    });
+  const { control, handleSubmit, formState } = useForm<WordDetailForm>({
+    defaultValues: defaults,
+  });
 
   const { fields: meaningFields } = useFieldArray({
     control,
@@ -52,14 +51,16 @@ export function WordEditForm({
       <section className="rounded-lg border bg-white p-4 shadow-sm">
         <h2 className="mb-3 text-lg font-semibold text-gray-800">Word</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <AppFormInput label="Form" {...register('word.form')} />
-          <AppFormInput
+          <RhfInput control={control} name="word.form" label="Form" />
+          <RhfInput
+            control={control}
+            name="word.phonetic_us"
             label="Phonetic (US)"
-            {...register('word.phonetic_us')}
           />
-          <AppFormInput
+          <RhfInput
+            control={control}
+            name="word.phonetic_uk"
             label="Phonetic (UK)"
-            {...register('word.phonetic_uk')}
           />
         </div>
         {/* Read-only fields */}
@@ -90,13 +91,15 @@ export function WordEditForm({
                   #{field.meaning_id} &middot; pos={field.pos}
                 </span>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <AppFormInput
+                  <RhfInput
+                    control={control}
+                    name={`meanings.${i}.cn_paraphrase`}
                     label="CN Paraphrase"
-                    {...register(`meanings.${i}.cn_paraphrase`)}
                   />
-                  <AppFormInput
+                  <RhfInput
+                    control={control}
+                    name={`meanings.${i}.en_paraphrase`}
                     label="EN Paraphrase"
-                    {...register(`meanings.${i}.en_paraphrase`)}
                   />
                 </div>
               </div>
@@ -148,13 +151,15 @@ export function WordEditForm({
                   #{field.sentence_id}
                 </span>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <AppFormInput
+                  <RhfInput
+                    control={control}
+                    name={`sentences.${i}.form`}
                     label="Sentence"
-                    {...register(`sentences.${i}.form`)}
                   />
-                  <AppFormInput
+                  <RhfInput
+                    control={control}
+                    name={`sentences.${i}.translation`}
                     label="Translation"
-                    {...register(`sentences.${i}.translation`)}
                   />
                 </div>
               </div>
@@ -179,13 +184,15 @@ export function WordEditForm({
                   #{field.phrase_id}
                 </span>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <AppFormInput
+                  <RhfInput
+                    control={control}
+                    name={`phrases.${i}.form`}
                     label="Phrase"
-                    {...register(`phrases.${i}.form`)}
                   />
-                  <AppFormInput
+                  <RhfInput
+                    control={control}
+                    name={`phrases.${i}.meaning`}
                     label="Meaning"
-                    {...register(`phrases.${i}.meaning`)}
                   />
                 </div>
               </div>
@@ -196,9 +203,9 @@ export function WordEditForm({
 
       {/* Submit button */}
       <div className="flex items-center gap-4">
-        <AppButton type="submit" disabled={!formState.isDirty}>
+        <Button theme="solid" htmlType="submit" disabled={!formState.isDirty}>
           Review Changes
-        </AppButton>
+        </Button>
         {!formState.isDirty && (
           <span className="text-sm text-gray-400">No changes to submit</span>
         )}

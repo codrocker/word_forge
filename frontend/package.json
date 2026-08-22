@@ -9,13 +9,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@douyinfe/semi-icons": "^2.102.0",
+    "@douyinfe/semi-ui": "^2.102.0",
     "@hookform/resolvers": "^3.9.1",
     "@tanstack/react-query": "^5.62.0",
     "axios": "^1.7.9",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-hook-form": "^7.54.2",
-    "react-hot-toast": "^2.6.0",
     "react-router-dom": "^6.28.0",
     "zod": "^3.24.1"
   },

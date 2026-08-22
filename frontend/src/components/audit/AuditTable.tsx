@@ -1,3 +1,5 @@
+import { Table, Tag } from '@douyinfe/semi-ui';
+import type { ColumnProps } from '@douyinfe/semi-ui/lib/es/table';
 import type { AuditItem } from '@/api/audit';
 
 function formatValue(v: unknown): string {
@@ -7,54 +9,77 @@ function formatValue(v: unknown): string {
   return s.length > 80 ? s.slice(0, 80) + '...' : s;
 }
 
+const columns: ColumnProps<AuditItem>[] = [
+  {
+    title: 'Time',
+    dataIndex: 'created_at',
+    render: (v: string) => (
+      <span className="whitespace-nowrap text-gray-600">
+        {new Date(v).toLocaleString()}
+      </span>
+    ),
+  },
+  {
+    title: 'Editor',
+    render: (_: unknown, item: AuditItem) => item.editor.display_name,
+  },
+  {
+    title: 'Word ID',
+    dataIndex: 'word_id',
+    render: (v: number) => <span className="font-mono">{v}</span>,
+  },
+  {
+    title: 'Field',
+    dataIndex: 'field_path',
+    render: (_: unknown, item: AuditItem) => (
+      <span className="font-mono text-xs">
+        {item.field_path}
+        {item.target_id != null && (
+          <span className="ml-1 text-gray-400">#{item.target_id}</span>
+        )}
+      </span>
+    ),
+  },
+  {
+    title: 'Op',
+    dataIndex: 'op',
+    render: (op: string) => (
+      <Tag size="small" color="grey">
+        {op}
+      </Tag>
+    ),
+  },
+  {
+    title: 'Old',
+    dataIndex: 'old_value',
+    render: (v: unknown) => (
+      <span className="max-w-[200px] truncate font-mono text-xs text-red-700">
+        {formatValue(v)}
+      </span>
+    ),
+  },
+  {
+    title: 'New',
+    dataIndex: 'new_value',
+    render: (v: unknown) => (
+      <span className="max-w-[200px] truncate font-mono text-xs text-green-700">
+        {formatValue(v)}
+      </span>
+    ),
+  },
+];
+
 type AuditTableProps = {
   items: AuditItem[];
 };
 
 export function AuditTable({ items }: AuditTableProps) {
   return (
-    <div className="overflow-x-auto rounded border border-gray-200">
-      <table className="min-w-full text-left text-sm">
-        <thead className="border-b bg-gray-50 text-xs uppercase text-gray-600">
-          <tr>
-            <th className="px-3 py-2">Time</th>
-            <th className="px-3 py-2">Editor</th>
-            <th className="px-3 py-2">Word ID</th>
-            <th className="px-3 py-2">Field</th>
-            <th className="px-3 py-2">Op</th>
-            <th className="px-3 py-2">Old</th>
-            <th className="px-3 py-2">New</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-100">
-          {items.map((item) => (
-            <tr key={item.id} className="hover:bg-gray-50">
-              <td className="whitespace-nowrap px-3 py-2 text-gray-600">
-                {new Date(item.created_at).toLocaleString()}
-              </td>
-              <td className="px-3 py-2">{item.editor.display_name}</td>
-              <td className="px-3 py-2 font-mono">{item.word_id}</td>
-              <td className="px-3 py-2 font-mono text-xs">
-                {item.field_path}
-                {item.target_id != null && (
-                  <span className="ml-1 text-gray-400">#{item.target_id}</span>
-                )}
-              </td>
-              <td className="px-3 py-2">
-                <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium">
-                  {item.op}
-                </span>
-              </td>
-              <td className="max-w-[200px] truncate px-3 py-2 font-mono text-xs text-red-700">
-                {formatValue(item.old_value)}
-              </td>
-              <td className="max-w-[200px] truncate px-3 py-2 font-mono text-xs text-green-700">
-                {formatValue(item.new_value)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <Table
+      columns={columns}
+      dataSource={items}
+      rowKey="id"
+      pagination={false}
+    />
   );
 }

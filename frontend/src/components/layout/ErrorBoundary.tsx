@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from 'react';
+import { Button } from '@douyinfe/semi-ui';
 
 type Props = { children: ReactNode };
 type State = { error: Error | null };
@@ -27,12 +28,9 @@ export class ErrorBoundary extends Component<Props, State> {
             {requestId && (
               <p className="text-xs text-gray-400 mb-4">request_id: {requestId}</p>
             )}
-            <button
-              className="bg-blue-600 text-white px-4 py-2 rounded"
-              onClick={() => window.location.reload()}
-            >
+            <Button theme="solid" htmlType="button" onClick={() => window.location.reload()}>
               刷新重试
-            </button>
+            </Button>
           </div>
         </div>
       );

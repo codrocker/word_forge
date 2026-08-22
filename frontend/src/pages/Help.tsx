@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Typography } from '@douyinfe/semi-ui';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -16,11 +16,9 @@ function Code({ children }: { children: React.ReactNode }) {
 export function Help() {
   return (
     <div className="mx-auto max-w-3xl p-6">
-      <div className="mb-4 flex items-center gap-4">
-        <h1 className="text-xl font-semibold">使用说明</h1>
-        <Link to="/" className="text-sm text-blue-600 hover:underline">← 词库</Link>
-        <Link to="/config-center" className="text-sm text-blue-600 hover:underline">配置中心 →</Link>
-      </div>
+      <Typography.Title heading={4} className="mb-4">
+        使用说明
+      </Typography.Title>
 
       <Section title="三分钟上手">
         <p>
@@ -29,14 +27,12 @@ export function Help() {
         </p>
         <ol className="list-decimal space-y-1 pl-6">
           <li>
-            <Link to="/config-center" className="text-blue-600 hover:underline">配置中心</Link>
-            →「供应商配置」：填中转站/官方的 Base URL 和 sk 密钥（如{' '}
+            「配置中心」→「供应商配置」：填中转站/官方的 Base URL 和 sk 密钥（如{' '}
             <Code>https://api.deepseek.com/v1</Code>），保存后点「拉取模型列表」验证密钥可用。
           </li>
           <li>「提示词库」：新建模板（或先用默认），「Agents」：把 供应商+模型+提示词 组合成一个 Agent。</li>
           <li>
-            <Link to="/experiments" className="text-blue-600 hover:underline">LLM 实验</Link>
-            ：选 Agent、填词数和种子 → 运行 → 结果表里看有效率和成本。
+            「LLM 实验」：选 Agent、填词数和种子 → 运行 → 结果表里看有效率和成本。
           </li>
         </ol>
       </Section>

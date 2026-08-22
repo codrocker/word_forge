@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useSearchParams, useNavigate, Link } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { Banner, Empty, Spin, Typography } from '@douyinfe/semi-ui';
 import { useSearchWordsQuery } from '@/api/words';
 import { ApiError } from '@/api/client';
 import { WordTable } from '@/components/words/WordTable';
@@ -96,23 +97,9 @@ export function Search() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Words</h1>
-        <div className="flex items-center gap-4">
-          <Link to="/experiments" className="text-sm text-blue-600 hover:underline">
-            LLM 实验 &rarr;
-          </Link>
-          <Link to="/config-center" className="text-sm text-blue-600 hover:underline">
-            配置中心 &rarr;
-          </Link>
-          <Link to="/help" className="text-sm text-blue-600 hover:underline">
-            使用说明 &rarr;
-          </Link>
-          <Link to="/audit" className="text-sm text-blue-600 hover:underline">
-            Audit Log &rarr;
-          </Link>
-        </div>
-      </div>
+      <Typography.Title heading={4} className="mb-6">
+        Words
+      </Typography.Title>
 
       <div className="mb-4">
         <FilterBar
@@ -128,18 +115,23 @@ export function Search() {
       </div>
 
       {isLoading && (
-        <div className="py-12 text-center text-gray-500">Loading...</div>
-      )}
-
-      {error && (
-        <div className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error instanceof ApiError ? error.message : 'Failed to load words'}
+        <div className="py-12 text-center">
+          <Spin size="large" />
         </div>
       )}
 
+      {error && (
+        <Banner
+          type="danger"
+          description={
+            error instanceof ApiError ? error.message : 'Failed to load words'
+          }
+        />
+      )}
+
       {data && data.items.length === 0 && (
-        <div className="py-12 text-center text-gray-500">
-          No matching words found.
+        <div className="py-12">
+          <Empty title="No matching words found." />
         </div>
       )}
 

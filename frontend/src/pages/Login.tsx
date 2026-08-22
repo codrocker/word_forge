@@ -1,9 +1,9 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { Button } from '@douyinfe/semi-ui';
 import { useLoginMutation } from '@/api/auth';
-import { AppButton } from '@/components/app/AppButton';
-import { AppFormInput } from '@/components/app/AppFormInput';
+import { RhfInput } from '@/components/form/RhfInput';
 import { ApiError } from '@/api/client';
 
 const loginSchema = z.object({
@@ -14,11 +14,9 @@ const loginSchema = z.object({
 type LoginForm = z.infer<typeof loginSchema>;
 
 export function LoginPage() {
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<LoginForm>({ resolver: zodResolver(loginSchema) });
+  const { handleSubmit, control } = useForm<LoginForm>({
+    resolver: zodResolver(loginSchema),
+  });
 
   const login = useLoginMutation();
 
@@ -34,20 +32,20 @@ export function LoginPage() {
         </h1>
 
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
-          <AppFormInput
+          <RhfInput
+            control={control}
+            name="email"
             label="Email"
             type="email"
             autoComplete="email"
-            error={errors.email?.message}
-            {...register('email')}
           />
 
-          <AppFormInput
+          <RhfInput
+            control={control}
+            name="password"
             label="Password"
             type="password"
             autoComplete="current-password"
-            error={errors.password?.message}
-            {...register('password')}
           />
 
           {login.isError && (
@@ -58,9 +56,13 @@ export function LoginPage() {
             </p>
           )}
 
-          <AppButton type="submit" disabled={login.isPending}>
-            {login.isPending ? 'Signing in...' : 'Sign in'}
-          </AppButton>
+          <Button
+            theme="solid"
+            htmlType="submit"
+            loading={login.isPending}
+          >
+            Sign in
+          </Button>
         </form>
       </div>
     </div>
