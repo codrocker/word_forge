@@ -1,4 +1,4 @@
-# wordforge — Codex 指北
+# wordforge — Agent 指北（CLAUDE.md 是本文件的软链）
 
 git 库：`git@github.com:codrocker/word_forge.git`
 
